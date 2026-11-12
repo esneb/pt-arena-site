@@ -1608,13 +1608,14 @@ function oaParseH2H(d,rel){
     total:w&&w.score!=null?w.score:'',ms:w?.timeMs||0,ok:d.confirmed===true,at:oaTime(d.confirmedAt)||named?.at||0,
     start:num(d.startMs,0),end:d.endMs==null?null:num(d.endMs),steps:[],file:clip,vok:true,noResult:!w,rel}}
 // RoboArena's own file beside each clip, <recordingId>.recording.json (schemaVersion 1): who raced, the programme, field and
-// round, when the run started and stopped, and whether the result is confirmed. The clip is the .webm whose name ends
-// in __<recordingId>.webm. A recording another attempt replaced is skipped. Who won is read from participants[].winner
+// round, when the run started and stopped, and whether the result is confirmed. The clip is the .webm or .mp4 whose name
+// ends in __<recordingId>. One run can come as two recordings (recordingView: the picture before and after it is
+// straightened); only the straightened one goes in the queue. A recording another attempt replaced is skipped. Who won is read from participants[].winner
 // when the file carries it; without it there is no result card, only the clip.
 function oaParseRec(d,rel){
   const num=(v,f=0)=>isFinite(+v)&&v!==null&&v!==''?+v:f,str=v=>v==null?'':String(v),t=v=>{const x=Date.parse(v);return isFinite(x)?x:null};
-  const id=str(d.recordingId),tail=('_'+id+'.webm').toLowerCase(),dir=rel.join('/');
-  const clip=OA.webm.find(x=>x.toLowerCase().endsWith(tail)&&x.slice(0,x.lastIndexOf('/')+1)===(dir?dir+'/':''))||'';
+  const id=str(d.recordingId),tails=['.webm','.mp4'].map(e=>('_'+id+e).toLowerCase()),dir=rel.join('/'),view=d.recordingView||{};
+  const clip=OA.webm.find(x=>tails.some(e=>x.toLowerCase().endsWith(e))&&x.slice(0,x.lastIndexOf('/')+1)===(dir?dir+'/':''))||'';
   const replaced=!!d.supersededByAttemptId||!!(d.currentAttemptId&&d.attemptId&&d.currentAttemptId!==d.attemptId);
   const teams=d.participants.map(p=>({teamId:str(p.teamId),name:str(p.team||p.teamId),school:str(p.school),side:str(p.side),
     score:p.score==null||p.score===''?null:num(p.score),timeMs:p.timeMs==null?null:num(p.timeMs),winner:p.winner===true,vside:str(p.videoSide),
@@ -1625,7 +1626,7 @@ function oaParseRec(d,rel){
   const clipAt={start:rec!=null&&go!=null?Math.max(0,go-rec):0,end:rec!=null&&stop!=null?Math.max(0,stop-rec):null};
   const ok=d.resultStatus==='confirmed'&&d.verified!==false&&!replaced,at=t(d.confirmedAt)||rec||0;
   const series=d.series&&d.series.bestOf>1?{game:num(d.series.game,1),bestOf:num(d.series.bestOf),wins:teams.map(x=>x.sw==null?0:x.sw),winner:(teams.find(x=>x.swin)||{}).name||''}:null;
-  const common={id:'rec:'+id,rec:true,replaced,matchId:str(d.matchId),field:str(d.fieldName||d.fieldId||'-'),round:d.round==null&&d.stage!=null?'':num(d.round,1),stage:d.stage==null?'':str(d.stage),stageName:str(d.stageName),series,
+  const common={id:'rec:'+id,rec:true,replaced,set:str(view.recordingSetId),view:str(view.view),matchId:str(d.matchId),field:str(d.fieldName||d.fieldId||'-'),round:d.round==null&&d.stage!=null?'':num(d.round,1),stage:d.stage==null?'':str(d.stage),stageName:str(d.stageName),series,
     prog:str(d.competitionName||String(d.competition||'').toUpperCase()),comp:str(d.competition),matchNo:d.matchNo==null||d.matchNo===''?'':str(d.matchNo),
     missions:[],items:{},steps:[],ok,at,...clipAt,file:clip.split('/').pop(),vok:!!clip,rel};
   // kind "solo" (RoboArena's word): one team runs alone and is judged on its own score and time, no winner;
@@ -1659,9 +1660,12 @@ function oaScan(){
     if(m.id&&(m.file||m.rec)&&!m.replaced&&(!o||(/\.recording\.json$/i.test(m.src)&&!/\.recording\.json$/i.test(o.src))))out.set(m.id,m)}catch(e){}}
   // a result file whose clip has not arrived yet waits; a clip whose result file has not arrived plays on its own
   const clips=new Set(OA.webm);
+  const recIds=[...out.values()].filter(m=>m.rec).map(m=>m.id.slice(4).toLowerCase());
+  // two pictures of one run: the straightened one (after-perspective) stays, the other is left out
+  const best=new Set([...out.values()].filter(m=>m.set&&m.view==='after-perspective').map(m=>m.set));
+  for(const[k,m]of out)if(m.set&&best.has(m.set)&&m.view!=='after-perspective')out.delete(k);
   for(const m of out.values())if(m.h2h)m.vok=!!m.file&&clips.has(oaRel(m));
   const mine=new Set([...out.values()].filter(m=>m.file).map(oaRel));
-  const recIds=[...out.values()].filter(m=>m.rec).map(m=>m.id.slice(4).toLowerCase());
   for(const p of OA.webm){if(test(p.split('/').slice(0,-1))&&!OA.tests)continue;const low=p.toLowerCase();if(recIds.some(i=>low.includes(i)))continue;const b=oaBare(p);if(b&&!mine.has(p)&&!out.has(b.id))out.set(b.id,b)}
   // Drive brings the small result file long before the clip: a clip counts only once it is on disk and has stopped growing
   for(const m of out.values())m.synced=OA.stable.has(oaRel(m))||!!oaCopy(m);
