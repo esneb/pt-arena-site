@@ -1576,6 +1576,8 @@ try{const k=JSON.parse(localStorage.getItem('ptarena:oa')||'{}');OA.order=k.orde
   OA.ads=k.ads||'';OA.advid=k.advid||'';OA.snd=k.snd||'';OA.credit=k.credit||'';OA.brkMode=k.brkMode||'break';OA.brkMin=k.brkMin||5;OA.brkAuto=k.brkAuto!==false;OA.brkHl=k.brkHl===true;OA.brollVol=Math.max(0,Math.min(100,+k.brollVol||0));OA.blocks=k.blocks!==false;OA.progOrder=Array.isArray(k.progOrder)?k.progOrder.filter(x=>typeof x==='string'):[];OA.brkShow=k.brkShow in OA_SHOW?k.brkShow:'ads';OA.sfx=k.sfx===true;OA.bgm=k.bgm in OA_BGM?k.bgm:'pt_loop.wav';OA.theme=k.theme in OA_THEMES?k.theme:'sports'}catch(e){}
 const oaKeep=()=>{try{localStorage.setItem('ptarena:oa',JSON.stringify({order:OA.order,played:[...OA.played],auto:OA.auto,delay:OA.delay,prog:OA.prog,skipSetup:OA.skipSetup,tests:OA.tests,ws:OA.ws,pw:OA.pw,ipSeen:OA.ipSeen,obsWant:OA.obsWant,field:OA.field,ads:OA.ads,advid:OA.advid,snd:OA.snd,credit:OA.credit,brkMode:OA.brkMode,brkMin:OA.brkMin,brkAuto:OA.brkAuto,brkHl:OA.brkHl,brollVol:OA.brollVol,blocks:OA.blocks,progOrder:OA.progOrder,brkShow:OA.brkShow,sfx:OA.sfx,bgm:OA.bgm,theme:OA.theme}))}catch(e){}};
 const oaGroup=m=>`${m.prog} · สนาม ${m.field}`;
+// the queue's small line: the round, or the stage when a match has no round number; nothing rather than a bare "ROUND"
+const oaRoundTag=m=>m.round!==''&&m.round!=null?' · ROUND '+esc(m.round):m.stageName?' · '+esc(m.stageName):m.stage?' · STAGE '+esc(m.stage):'';
 const oaTime=v=>{const t=typeof v==='number'?v:new Date(v||0).getTime();return isFinite(t)?t:0};
 
 // the only place that knows RoboArena's file layout: if their files change, only this changes.
@@ -2007,8 +2009,10 @@ async function obsStat(){
 const OA_MUTE={};
 function oaAlerts(){
   const a=[],now=Date.now(),H=OA.H||{},dr=H.drive||null,x=OA.stat;
-  const add=(key,lvl,text,todo)=>{if(!(OA_MUTE[key]>now))a.push({key,lvl,text,todo})};
+  const add=(key,lvl,text,todo,act)=>{if(!(OA_MUTE[key]>now))a.push({key,lvl,text,todo,act})};
   try{
+    // a desk that has never been connected: every on-air button is grey, so say why and offer the way out right here
+    if(!OA.obsWant&&!OBS.ok)add('obsfirst','warn','ยังไม่ได้ต่อ OBS','ปุ่มออกอากาศจะกดได้หลังต่อ OBS','oaconnect');
     if(OA.obsWant&&!OBS.ok)add('obs','bad','OBS ไม่ได้ต่ออยู่','เปิด OBS แล้วกด "↻ ต่อใหม่" ในกล่อง OBS ด้านล่าง');
     if(!OA.helperOk)add('helper','bad','ตัวช่วยห้องส่งไม่ตอบ: คลิปใหม่จะไม่เข้า','ดับเบิลคลิก open_Studio.cmd (ไม่ต้องปิด OBS)');
     if(OBS.ok&&OA.wasLive&&!OA.outs?.length&&!x?.s?.outputActive)add('live','bad','ไลฟ์หยุดส่งภาพแล้ว (ทุกช่อง)','ถ้าไม่ได้ตั้งใจหยุด: เช็กเน็ต แล้วกด Start ใน OBS หรือ Start all ในกล่อง Multiple output');
@@ -2024,7 +2028,7 @@ function oaAlerts(){
   const sig=a.map(x=>x.key+x.text).join('|');OA.alerts=a;
   if(sig!==OA.alertSig){OA.alertSig=sig;const el=document.getElementById('oaalerts');if(el)el.innerHTML=oaAlertHtml()}
 }
-const oaAlertHtml=()=>(OA.alerts||[]).map(x=>`<div class="oaal ${x.lvl}"><b>${x.lvl==='bad'?'●':'▲'} ${esc(x.text)}</b><span>${esc(x.todo)}</span><button class="btn sm" data-act="oamute" data-v="${x.key}">รับทราบ 10 นาที</button></div>`).join('');
+const oaAlertHtml=()=>(OA.alerts||[]).map(x=>`<div class="oaal ${x.lvl}"><b>${x.lvl==='bad'?'●':'▲'} ${esc(x.text)}</b><span>${esc(x.todo)}</span>${x.act==='oaconnect'?'<button class="btn sm pri" data-act="oaconnect">🔌 ต่อ OBS</button>':''}<button class="btn sm" data-act="oamute" data-v="${x.key}">รับทราบ 10 นาที</button></div>`).join('');
 function oaStatHtml(){
   const x=OA.stat;if(!OBS.ok||!x)return'';
   const drop=x.s.outputTotalFrames?x.s.outputSkippedFrames/x.s.outputTotalFrames*100:0,tc=t=>esc((t||'00:00:00').split('.')[0]);
@@ -2272,7 +2276,7 @@ function vOnair(){
   const groups=[...new Set(OA.list.map(oaGroup))],cur=OA.cur,H=OA.H||{},ip=(H.ips||[])[0]||'';
   const why=m=>OA.bad.has(m.id)?'⚠ '+OA.bad.get(m.id):!m.ok?'รอยืนยันผล':!m.vok?(m.rec?'รอคลิปจากไดรฟ์':'คลิปยังไม่บันทึก'):!m.synced?'กำลังซิงก์คลิปจากไดรฟ์':'ปล่อยได้อีก '+Math.max(1,Math.ceil((OA.delay*60000-(Date.now()-m.at))/60000))+' นาที';
   const row=(m,i,kind)=>`<div class="oaq ${cur?.id===m.id?'now':''}"><span class="oan mono">${kind==='ready'?String(i+1).padStart(2,'0'):''}</span>
-    <div class="who"><b>${esc(m.team)}</b><small>${esc(oaGroup(m))} · ROUND ${esc(m.round)}${kind==='wait'?' · '+esc(why(m)):''}</small></div>
+    <div class="who"><b>${esc(m.team)}</b><small>${kind==='wait'?esc(why(m))+' · ':''}${/^สนาม/.test(m.field)?'':'สนาม '}${esc(m.field)}${oaRoundTag(m)} · ${esc(m.prog)}</small></div>
     <b class="mono oasc">${m.h2h?(m.bare||m.noResult?'<small class="muted">ไม่มีผลแพ้ชนะ</small>':esc((m.teams.find(t=>t.winner)||{}).name?'🏆 '+m.teams.find(t=>t.winner).name:'')):esc(m.total)}</b>
     <span class="oabtn">${kind==='done'?`<button class="btn sm" data-act="oaagain" data-v="${esc(m.id)}" title="เล่นซ้ำ">↺</button>`
       :`<button class="btn sm" data-act="oaup" data-v="${esc(m.id)}" title="เลื่อนขึ้น">▲</button><button class="btn sm" data-act="oadown" data-v="${esc(m.id)}" title="เลื่อนลง">▼</button>${kind==='ready'?`<button class="btn sm" data-act="oaplay" data-v="${esc(m.id)}" title="เล่นอันนี้เลย" ${on?'':'disabled'}>▶</button>`:''}${OA.bad.has(m.id)?`<button class="btn sm" data-act="oaretry" data-v="${esc(m.id)}" title="ลองใหม่">↻</button>`:''}<button class="btn sm" data-act="oadrop" data-v="${esc(m.id)}" title="ไม่เล่น">✕</button>`}</span></div>`;
@@ -2287,7 +2291,7 @@ function vOnair(){
         <label class="cc wide2"><span>วิดีโอโฆษณา (ไฟล์ เล่นวนแทนรูป)</span><input type="text" id="oaadvid" value="${esc(OA.advid)}" placeholder="${esc(H.advid||'ไม่มี · ใช้รูป')}" autocomplete="off"></label>
         <label class="cc wide2"><span>เพลงและเสียงคั่น (โฟลเดอร์)</span><input type="text" id="oasnd" value="${esc(OA.snd)}" placeholder="${esc(H.music||'')}" autocomplete="off"></label>
         <label class="cc"><span>เครดิตเพลง (มุมจอตอนพักเบรก)</span><input type="text" id="oacredit" value="${esc(OA.credit)}" autocomplete="off"></label>
-        <label class="cc"><span>รหัสเจ้าหน้าที่ (ห้องส่งและกล้องเดิน)</span><input type="text" value="${esc(S.staffPin)}" data-bind="staff" autocomplete="off"></label>
+        <label class="cc"><span>รหัสเจ้าหน้าที่ (ห้องส่งและกล้องเดิน)</span><span class="pwbox"><input type="password" value="${esc(S.staffPin)}" data-bind="staff" autocomplete="off"><button type="button" class="eye" data-act="oaeye" aria-label="ดูรหัส">👁</button></span></label>
       </div>
       <p class="small muted" style="margin:0">ช่องที่เว้นว่าง ใช้ที่อยู่จากตัวช่วยห้องส่ง (สีจาง) · เปลี่ยนแล้วกด "ตั้งฉากให้ใน OBS" อีกครั้ง</p>
       <div class="row"><button class="btn ${on?'':'pri'}" data-act="oaconnect">${on?'↻ ต่อใหม่':'🔌 ต่อ OBS'}</button><button class="btn" data-act="oasetup" ${on?'':'disabled'}>🎬 ตั้งฉากให้ใน OBS</button></div>
@@ -2349,7 +2353,7 @@ function vOnair(){
           <button class="btn sm" data-act="oablocks" aria-pressed="${OA.blocks}">${OA.blocks?'✓':'✕'} เล่นเป็นช่วง ทีละรายการ</button>
           ${OA.blocks?(()=>{const ps=oaProgs(),q=oaQueueRaw();if(!ps.length)return'';
             return`<div class="oaprogs" style="width:100%"><span class="small muted">ลำดับรายการ (เล่นทีละช่วงตามนี้ วนกลับเมื่อครบ)</span>${ps.map((p,i)=>{const n=q.filter(m=>m.prog===p&&oaReady(m)).length;
-              return`<div class="row oaprow ${p===OA.block?'on':''}"><span class="mono">${i+1}</span><span class="grow">${esc(p)}${p===OA.block?' · กำลังเล่น':''}</span><span class="tagx">${n} พร้อม</span><button class="btn sm" data-act="oaprogup" data-v="${i}" ${i?'':'disabled'}>↑</button><button class="btn sm" data-act="oaprogdown" data-v="${i}" ${i<ps.length-1?'':'disabled'}>↓</button></div>`}).join('')}</div>`})():''}
+              return`<div class="row oaprow ${p===OA.block?'on':''}"><span class="mono">${i+1}</span><span class="grow">${esc(p)}${p===OA.block?' · กำลังเล่น':''}</span><span class="tagx">${n} พร้อม</span><button class="btn sm" data-act="oaprogup" data-v="${i}" title="เลื่อนขึ้น" ${i?'':'disabled'}>↑</button><button class="btn sm" data-act="oaprogdown" data-v="${i}" title="เลื่อนลง" ${i<ps.length-1?'':'disabled'}>↓</button></div>`}).join('')}</div>`})():''}
           <button class="btn sm" data-act="oaskipset" aria-pressed="${OA.skipSetup}">${OA.skipSetup?'✓':'✕'} บังช่วงเตรียมหุ่น</button>
           <button class="btn sm" data-act="oatests" aria-pressed="${OA.tests}">${OA.tests?'✓':'✕'} รวมคลิปทดสอบ (ซ้อม)</button>
         </div>
@@ -2534,7 +2538,7 @@ document.addEventListener('click',e=>{
     // the boxes save when they lose focus; a click on connect right after pasting must still use what is typed
     case'oaconnect':{const w=$('#oaws'),k=$('#oapw');if(w)OA.ws=w.value.trim();if(k)OA.pw=k.value.trim();OA.obsWant=true;oaKeep();OBS.connect();break}
     case'oasetup':obsSetup();return;
-    case'oaeye':{const i=$('#oapw');if(i)i.type=i.type==='password'?'text':'password';return}
+    case'oaeye':{const i=b.closest('.pwbox')?.querySelector('input');if(i)i.type=i.type==='password'?'text':'password';return}
     case'oafield':OA.field.main=b.dataset.v;oaKeep();oaFieldPick();return;
     case'oaflay':OA.field.layout=b.dataset.v==='one'?'one':'big';oaKeep();oaFieldPick();oaDraw();return;
     case'oascene':OBS.req('SetCurrentProgramScene',{sceneName:b.dataset.v}).catch(e=>toast('สลับฉากไม่ได้: '+e.message));return;

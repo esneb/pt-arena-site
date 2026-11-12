@@ -621,7 +621,7 @@ body.crwall .tabs-wrap{margin-inline:-12px;padding-inline:12px}
 .cr-letter{font-family:var(--f-display);font-size:30px;line-height:1;min-width:26px}
 .cr-what{font-size:12px;color:var(--muted);line-height:1.25;flex:1;min-width:0}
 .cr-leds{flex-direction:column;align-items:flex-end;gap:2px;margin-left:0}
-.led{font-size:10px;padding:0 6px}
+.led{font-size:11px;padding:0 6px}
 .cr-live{gap:6px}
 .cr-live b{font-size:14px}
 .cr-live small{font-size:11px}
@@ -796,23 +796,23 @@ body.oadesk .tab[aria-selected=true]{background:#3268f5;box-shadow:none}
 .oa .btn.bad{background:#e5484d;border-color:#e5484d}
 .oahead{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
 .oabrand{display:flex;align-items:center;gap:12px;font-size:21px;font-weight:800;letter-spacing:2px}
-.oabrand small{display:block;font-size:9px;letter-spacing:2.6px;color:var(--ra-muted);font-weight:700}
+.oabrand small{display:block;font-size:11px;letter-spacing:2.2px;color:var(--ra-muted);font-weight:700}
 .oabm{display:grid;place-items:center;width:46px;height:46px;background:#3268f5;clip-path:polygon(18% 0,100% 0,100% 82%,82% 100%,0 100%,0 18%);font-weight:800}
 .oa .oas{font-size:11px;letter-spacing:1.4px;font-weight:700;border:1px solid #375785;background:none;padding:6px 10px;border-radius:5px;color:#abc8f5}
 .oa .oas.live{background:#e5484d;border-color:#e5484d;color:#fff}
 .oa .oas.rec{color:#ff9a9d;border-color:#7a3a45}
 .oa .oas.bad{color:#f5c28e;border-color:#7a5a2d;background:none}
-.tagx{font-size:10px;letter-spacing:1.4px;font-weight:700;border:1px solid #375785;padding:6px 10px;border-radius:5px;color:#abc8f5;white-space:nowrap}
+.tagx{font-size:11px;letter-spacing:1.4px;font-weight:700;border:1px solid #375785;padding:6px 10px;border-radius:5px;color:#abc8f5;white-space:nowrap}
 .tagx.good{color:#89e2c0;border-color:#2d655e}.tagx.bad{color:#ff9a9d;border-color:#7a3a45}
 .oahero{position:relative;overflow:hidden;display:flex;align-items:center;gap:20px;padding:26px 30px 30px;background:linear-gradient(115deg,#183b77,#142843 65%,#172452);border:1px solid #375a91;border-radius:16px}
 .oahero:after{content:'';position:absolute;width:300px;height:300px;right:20px;top:-120px;border:35px solid #729fff0a;transform:rotate(45deg);pointer-events:none}
 .oahero-l{flex:1;min-width:0;position:relative}
-.eyebrow2{font-size:10px;font-weight:700;letter-spacing:2px;color:#9dbfee;text-transform:uppercase}
+.eyebrow2{font-size:11px;font-weight:700;letter-spacing:2px;color:#9dbfee;text-transform:uppercase}
 .oahero h1{font-size:clamp(26px,3.4vw,42px);line-height:1.2;margin:10px 0 14px;letter-spacing:-.5px}
 .oahb{display:flex;flex-wrap:wrap;gap:24px;font-size:11px;color:#a5bfdf;letter-spacing:1px}
 .oahb b{color:#fff;margin-left:6px;font-size:16px;letter-spacing:0}
 .oascore{position:relative;text-align:right}
-.oascore span{display:block;font-size:10px;letter-spacing:2px;color:#9dbfee;font-weight:700}
+.oascore span{display:block;font-size:11px;letter-spacing:2px;color:#9dbfee;font-weight:700}
 .oascore b{font-size:64px;line-height:1;color:#91c3ff}
 .oaline{position:absolute;left:0;right:0;bottom:0;height:4px;background:#0d192b}
 .oaline i{display:block;height:100%;background:linear-gradient(90deg,#76caff,#4662f5);transition:width .25s linear}
@@ -822,7 +822,11 @@ body.oadesk .tab[aria-selected=true]{background:#3268f5;box-shadow:none}
 .oa .oaq{border-top:1px solid #25364f}
 .oa .oaq.now{background:#20375855;border-left:3px solid #6099ff}
 .oa .oan{color:#7692b8;font-size:13px}
-.oa .oasc{color:#91c3ff;font-size:22px}
+.oa small{font-size:13px}
+.oa .oaq .who{flex:1 1 50%}
+.oa .oasc{color:#91c3ff;font-size:22px;flex:0 1 auto;min-width:0;text-align:right}
+.oa .oasc small{font-size:14px}
+.oa .oaq .who small{font-size:13px;white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2}
 .oa .oascb[aria-pressed=true]{background:#e5484d;border-color:#e5484d;color:#fff;box-shadow:0 0 18px #e5484d55}
 .oa .oaobs summary{gap:12px;justify-content:space-between}
 .oa .oaobs summary .oah{margin:0}
@@ -850,7 +854,7 @@ body.rxonly:before{display:none}
 body.rxonly .app,body.rxonly #toast,body.rxonly #net{display:none!important}
 #rxv{position:fixed;inset:0;width:100vw;height:100vh;object-fit:contain;background:#000}
 #rxv[hidden]{display:none}
-.oakeys{margin-left:auto;font-size:10px;letter-spacing:.5px;font-weight:600;color:var(--ra-muted)}
+.oakeys{margin-left:auto;font-size:12px;letter-spacing:.5px;font-weight:600;color:var(--ra-muted)}
 .oacamr{display:flex;align-items:flex-start;gap:12px;padding:8px 0;border-top:1px solid var(--ra-line)}
 .oacamr:first-of-type{border-top:0}
 .oacamr .tagx{flex:none;min-width:62px;text-align:center}
