@@ -820,7 +820,35 @@ body.oadesk .tab[aria-selected=true]{background:#3268f5;box-shadow:none}
 .oah i{display:block;width:3px;height:14px;background:#6099ff;box-shadow:0 0 12px #6099ff55}
 .oah .mono{margin-left:auto;color:#91c3ff;font-size:14px}
 .oa .oaq{border-top:1px solid #25364f}
-.oa .oaq.now{background:#20375855;border-left:3px solid #6099ff}
+.oa .oaq{padding:6px 0}
+.oa .oaq.now{background:#20375888;box-shadow:inset 0 0 0 1px #6099ff;border-radius:8px;margin-inline:-8px;padding-inline:8px}
+.oa .oamv{display:flex;gap:2px;flex:none}
+.oa .oamv .btn{min-width:30px;padding-inline:6px;color:#9db8de}
+.oa .oawin{font-style:normal;font-weight:600;color:#bfe0ff}
+.oa .oaplay1{flex:none;min-width:54px;min-height:40px;margin-left:8px;font-size:16px;background:#1b3f86;border-color:#4d7fe0;color:#fff}
+.oa .oaplay1:hover{background:#2553ad}
+.oa .oagone{background:#1b3f8633;box-shadow:inset 0 0 0 1px #4d7fe0;border-radius:8px;margin-inline:-8px;padding:10px 8px}
+.oa .oagone .who small{color:#bfd6f5}
+.oatop{position:sticky;top:0;z-index:5;display:flex;flex-direction:column;gap:8px;padding:8px 0;background:#080f1ef5;border-bottom:1px solid var(--ra-line)}
+.oapin.off .oapill{border-color:#e5484d;color:#ffb3b6}
+.oahero.off{background:linear-gradient(115deg,#2a2f3b,#1b202b);border-color:#e5484d}
+.oahero.off .oaline i{background:#8a94a8}
+.oapin{display:flex;align-items:center;justify-content:center;gap:10px;flex:1;min-width:0}
+.oapill{flex:none;font-size:13px;font-weight:800;letter-spacing:1px;padding:6px 12px;border-radius:5px;border:1px solid #375785;color:#abc8f5;white-space:nowrap}
+.oapin.on .oapill{background:#e5484d;border-color:#e5484d;color:#fff}
+.oapin.hold .oapill{background:#e0a93e;border-color:#e0a93e;color:#1c1300}
+.oapin span{min-width:0;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.oahero .eyebrow2{font-size:14px}
+.oahero.on{background:linear-gradient(115deg,#93202a,#541624 65%,#2d1424);border-color:#e5484d}
+.oahero.on .eyebrow2,.oahero.on .oascore span{color:#ffd3d5}
+.oahero.on .oahb{color:#f3c9cb}
+.oahero.on .oascore b{color:#fff}
+.oahero.on .oaline i{background:#ffd3d5}
+.oahero.hold{background:linear-gradient(115deg,#6e4d0e,#3d2c13 65%,#261e18);border-color:#e0a93e}
+.oahero.hold .eyebrow2,.oahero.hold .oascore span{color:#ffe2a8}
+.oahero.hold .oahb{color:#ecd7ae}
+.oahero.hold .oascore b{color:#fff}
+.oahero.hold .oaline i{background:#ffe2a8}
 .oa .oan{color:#7692b8;font-size:13px}
 .oa small{font-size:13px}
 .oa .oaq .who{flex:1 1 50%}

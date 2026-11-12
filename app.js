@@ -1758,7 +1758,8 @@ async function obsReady(){
 const oaFieldPick=()=>OBS.req('BroadcastCustomEvent',{eventData:{pt:'field',k:'pick',...OA.field}}).catch(()=>{});
 function obsEvent(t,d){
   // the graphics follow the scene: the corner mark on the walking camera, the replay's own state when it comes back
-  if(t==='CurrentProgramSceneChanged'){OA.scene=d.sceneName;OA.scene===OA_SCENE?oaBackOnAir():oaOffAir();oaSay();oaDraw()}
+  // leaving the break scene any other way (start queue, a scene key, OBS itself) ends the break, so its countdown cannot stop a clip later
+  if(t==='CurrentProgramSceneChanged'){if(OA.brk&&d.sceneName!==OA_BREAK){OA.brk=null;oaBoardOff()}OA.scene=d.sceneName;OA.scene===OA_SCENE?oaBackOnAir():oaOffAir();oaSay();oaDraw()}
   else if(t==='MediaInputPlaybackEnded'&&d.inputName===OA_CLIP&&OA.phase==='play'&&Date.now()-OA.t0>1500)oaDone();
   else if(t==='CustomEvent'&&d.pt===1&&d.k==='hello')oaSay();
   // the field page reports what it shows; a page that came up without the desk's pick (OBS restarted) gets it again
@@ -2013,7 +2014,7 @@ function oaAlerts(){
   try{
     // a desk that has never been connected: every on-air button is grey, so say why and offer the way out right here
     if(!OA.obsWant&&!OBS.ok)add('obsfirst','warn','ยังไม่ได้ต่อ OBS','ปุ่มออกอากาศจะกดได้หลังต่อ OBS','oaconnect');
-    if(OA.obsWant&&!OBS.ok)add('obs','bad','OBS ไม่ได้ต่ออยู่','เปิด OBS แล้วกด "↻ ต่อใหม่" ในกล่อง OBS ด้านล่าง');
+    if(OA.obsWant&&!OBS.ok)add('obs','bad','OBS ไม่ได้ต่ออยู่','เปิด OBS ก่อน แล้วกดต่อใหม่','oareconnect');
     if(!OA.helperOk)add('helper','bad','ตัวช่วยห้องส่งไม่ตอบ: คลิปใหม่จะไม่เข้า','ดับเบิลคลิก open_Studio.cmd (ไม่ต้องปิด OBS)');
     if(OBS.ok&&OA.wasLive&&!OA.outs?.length&&!x?.s?.outputActive)add('live','bad','ไลฟ์หยุดส่งภาพแล้ว (ทุกช่อง)','ถ้าไม่ได้ตั้งใจหยุด: เช็กเน็ต แล้วกด Start ใน OBS หรือ Start all ในกล่อง Multiple output');
     const drops=[...(OA.outs||[]),...(x?.s?.outputActive?[{name:'stream',...x.s}]:[])].map(o=>o.outputTotalFrames>300?o.outputSkippedFrames/o.outputTotalFrames*100:0);
@@ -2028,7 +2029,7 @@ function oaAlerts(){
   const sig=a.map(x=>x.key+x.text).join('|');OA.alerts=a;
   if(sig!==OA.alertSig){OA.alertSig=sig;const el=document.getElementById('oaalerts');if(el)el.innerHTML=oaAlertHtml()}
 }
-const oaAlertHtml=()=>(OA.alerts||[]).map(x=>`<div class="oaal ${x.lvl}"><b>${x.lvl==='bad'?'●':'▲'} ${esc(x.text)}</b><span>${esc(x.todo)}</span>${x.act==='oaconnect'?'<button class="btn sm pri" data-act="oaconnect">🔌 ต่อ OBS</button>':''}<button class="btn sm" data-act="oamute" data-v="${x.key}">รับทราบ 10 นาที</button></div>`).join('');
+const oaAlertHtml=()=>(OA.alerts||[]).map(x=>`<div class="oaal ${x.lvl}"><b>${x.lvl==='bad'?'●':'▲'} ${esc(x.text)}</b><span>${esc(x.todo)}</span>${x.act?`<button class="btn sm pri" data-act="oaconnect">${x.act==='oareconnect'?'↻ ต่อใหม่':'🔌 ต่อ OBS'}</button>`:''}<button class="btn sm" data-act="oamute" data-v="${x.key}">รับทราบ 10 นาที</button></div>`).join('');
 function oaStatHtml(){
   const x=OA.stat;if(!OBS.ok||!x)return'';
   const drop=x.s.outputTotalFrames?x.s.outputSkippedFrames/x.s.outputTotalFrames*100:0,tc=t=>esc((t||'00:00:00').split('.')[0]);
@@ -2272,16 +2273,24 @@ function oaMove(id,d){const i=OA.order.indexOf(id),j=i+d;if(i<0||j<0||j>=OA.orde
 
 function vOnair(){
   if(ROLE==='staff'&&!OA.loaded){OA.loaded=true;oaClock();oaHelper();if(OA.obsWant&&!OBS.ws)OBS.connect()}
-  const on=OBS.ok,q=oaQueue(),ready=q.filter(oaReady),wait=q.filter(m=>!oaReady(m)),done=OA.order.map(id=>OA.list.find(m=>m.id===id)).filter(m=>m&&OA.played.has(m.id));
+  const on=OBS.ok,q=oaQueue(),ready=q.filter(oaReady),wait=q.filter(m=>!oaReady(m)),done=OA.order.map(id=>OA.list.find(m=>m.id===id)).filter(m=>m&&OA.played.has(m.id)&&m.id!==OA.undo);
   const groups=[...new Set(OA.list.map(oaGroup))],cur=OA.cur,H=OA.H||{},ip=(H.ips||[])[0]||'';
   const why=m=>OA.bad.has(m.id)?'⚠ '+OA.bad.get(m.id):!m.ok?'รอยืนยันผล':!m.vok?(m.rec?'รอคลิปจากไดรฟ์':'คลิปยังไม่บันทึก'):!m.synced?'กำลังซิงก์คลิปจากไดรฟ์':'ปล่อยได้อีก '+Math.max(1,Math.ceil((OA.delay*60000-(Date.now()-m.at))/60000))+' นาที';
-  const row=(m,i,kind)=>`<div class="oaq ${cur?.id===m.id?'now':''}"><span class="oan mono">${kind==='ready'?String(i+1).padStart(2,'0'):''}</span>
-    <div class="who"><b>${esc(m.team)}</b><small>${kind==='wait'?esc(why(m))+' · ':''}${/^สนาม/.test(m.field)?'':'สนาม '}${esc(m.field)}${oaRoundTag(m)} · ${esc(m.prog)}</small></div>
-    <b class="mono oasc">${m.h2h?(m.bare||m.noResult?'<small class="muted">ไม่มีผลแพ้ชนะ</small>':esc((m.teams.find(t=>t.winner)||{}).name?'🏆 '+m.teams.find(t=>t.winner).name:'')):esc(m.total)}</b>
-    <span class="oabtn">${kind==='done'?`<button class="btn sm" data-act="oaagain" data-v="${esc(m.id)}" title="เล่นซ้ำ">↺</button>`
-      :`<button class="btn sm" data-act="oaup" data-v="${esc(m.id)}" title="เลื่อนขึ้น">▲</button><button class="btn sm" data-act="oadown" data-v="${esc(m.id)}" title="เลื่อนลง">▼</button>${kind==='ready'?`<button class="btn sm" data-act="oaplay" data-v="${esc(m.id)}" title="เล่นอันนี้เลย" ${on?'':'disabled'}>▶</button>`:''}${OA.bad.has(m.id)?`<button class="btn sm" data-act="oaretry" data-v="${esc(m.id)}" title="ลองใหม่">↻</button>`:''}<button class="btn sm" data-act="oadrop" data-v="${esc(m.id)}" title="ไม่เล่น">✕</button>`}</span></div>`;
+  const row=(m,i,kind)=>OA.undo===m.id&&kind!=='done'?`<div class="oaq oagone"><span class="oan mono"></span><div class="who"><small>เอาออกจากคิวแล้ว</small><b>${esc(m.team)}</b></div><button class="btn sm pri" data-act="oaagain" data-v="${esc(m.id)}">↩ เอากลับ</button></div>`:`<div class="oaq ${cur?.id===m.id?'now':''}">${kind==='done'?'':`<span class="oamv"><button class="btn sm" data-act="oaup" data-v="${esc(m.id)}" title="เลื่อนขึ้น" aria-label="เลื่อนขึ้น">▲</button><button class="btn sm" data-act="oadown" data-v="${esc(m.id)}" title="เลื่อนลง" aria-label="เลื่อนลง">▼</button></span>`}<span class="oan mono">${kind==='ready'?String(i+1).padStart(2,'0'):''}</span>
+    <div class="who"><b>${esc(m.team)}</b><small>${kind==='wait'?esc(why(m))+' · ':''}${m.h2h?`<i class="oawin">${m.bare||m.noResult?'ไม่มีผลแพ้ชนะ':esc((m.teams.find(t=>t.winner)||{}).name?'🏆 '+m.teams.find(t=>t.winner).name:'')}</i> · `:''}${/^สนาม/.test(m.field)?'':'สนาม '}${esc(m.field)}${oaRoundTag(m)} · ${esc(m.prog)}</small></div>
+    ${m.h2h?'':`<b class="mono oasc">${esc(m.total)}</b>`}
+    <span class="oabtn">${kind==='done'?`<button class="btn sm" data-act="oaagain" data-v="${esc(m.id)}" title="เอากลับเข้าคิว" aria-label="เอากลับเข้าคิว">↺</button>`
+      :`${OA.bad.has(m.id)?`<button class="btn sm" data-act="oaretry" data-v="${esc(m.id)}" title="ลองใหม่" aria-label="ลองใหม่">↻</button>`:''}<button class="btn sm" data-act="oadrop" data-v="${esc(m.id)}" data-k="${kind}" title="ไม่เล่น" aria-label="ไม่เล่น">✕</button>`}</span>${kind==='ready'?`<button class="btn oaplay1" data-act="oaplay" data-v="${esc(m.id)}" title="เล่นอันนี้เลย" aria-label="เล่นอันนี้เลย" ${on?'':'disabled'}>▶</button>`:''}</div>`;
   const live=OA.stat?.s?.outputActive,rec=OA.stat?.r?.outputActive;
-  const state=OA.phase==='play'?(OA.offAir?'รอกลับฉากรีเพลย์':OA.paused?'PAUSED · หยุดชั่วคราว':OA.cover?'GET READY · บังช่วงเตรียมหุ่น':'ON AIR · กำลังเล่น'):OA.phase==='load'?'LOADING · กำลังเปิดคลิป':OA.phase==='hl'?'HIGHLIGHT · กำลังเล่นไฮไลต์':OA.phase==='result'?'RESULT · ขึ้นผลการแข่ง':OA.phase==='next'?'NEXT · ขึ้นทีมถัดไป':OA.hold?'HOLD · รอกลับฉากรีเพลย์':'STAND BY · หน้าพัก';
+  const state=OA.phase==='play'?(OA.offAir?'รอกลับฉากรีเพลย์':OA.paused?'PAUSED · หยุดชั่วคราว':OA.cover?'GET READY · บังช่วงเตรียมหุ่น':'ON AIR · กำลังเล่น'):OA.phase==='load'?'LOADING · กำลังเปิดคลิป':OA.phase==='hl'?'HIGHLIGHT · กำลังเล่นไฮไลต์':OA.phase==='result'?'RESULT · ขึ้นผลการแข่ง':OA.phase==='next'?'NEXT · ขึ้นทีมถัดไป':OA.phase==='blk'?'TITLE · ขึ้นชื่อรายการ':OA.phase==='adv'?'ADVANCE · ขึ้นป้ายเข้ารอบ':OA.hold?'HOLD · รอกลับฉากรีเพลย์':'STAND BY · หน้าพัก';
+  // the colour of the desk follows what goes out: red while a match plays, amber while it is held or on a break
+  // OBS gone while the desk was in use comes first: nothing below can be trusted to be going out
+  const run=['play','load','hl','result','next','blk','adv'].includes(OA.phase),lost=OA.obsWant&&!on,
+    air=lost?'off':OA.brk?'hold':run?(OA.phase==='play'&&(OA.offAir||OA.paused||OA.cover)?'hold':'on'):(OA.hold?'hold':''),
+    pill=lost?'OBS หลุด · ยังไม่ได้ต่อ':OA.brk?'BREAK · พักเบรก':state;
+  // a match just taken out keeps its place in its list for a few seconds, as a row that offers to take it back
+  const gone=OA.undo&&OA.played.has(OA.undo)?OA.list.find(m=>m.id===OA.undo):null,pos=id=>OA.order.indexOf(id),
+    keep=(l,k)=>{if(!gone||OA.undoK!==k)return l;const i=l.filter(m=>pos(m.id)<pos(gone.id)).length;return[...l.slice(0,i),gone,...l.slice(i)]};
   const setup=`<details class="panel oaobs" ${on?'':'open'}><summary><span class="oah"><i></i>OBS CONNECTION · ตั้งค่า OBS</span> <span class="tagx ${on?'good':OA.obsState==='connecting'?'':'bad'}">${on?'CONNECTED':OA.obsState==='connecting'?'CONNECTING…':'OFFLINE'}</span></summary>
       ${OA.obsErr&&!on?`<div class="callout bad small">${esc(OA.obsErr)}<br>1. เปิด OBS<br>2. OBS เมนู Tools → WebSocket Server Settings → ติ๊ก Enable WebSocket server<br>3. กด Show Connect Info แล้วก๊อปรหัสมาวางด้านล่าง</div>`:''}
       <div class="oaform">
@@ -2297,15 +2306,16 @@ function vOnair(){
       <div class="row"><button class="btn ${on?'':'pri'}" data-act="oaconnect">${on?'↻ ต่อใหม่':'🔌 ต่อ OBS'}</button><button class="btn" data-act="oasetup" ${on?'':'disabled'}>🎬 ตั้งฉากให้ใน OBS</button></div>
     </details>`;
   return`<div class="oa">
-    <header class="oahead">
+    <div class="oatop"><header class="oahead">
       <div class="oabrand"><div class="oabm"><img src="logo-mark.png" alt="PT"></div><div>ROBOARENA<small>BROADCAST DESK · ห้องส่ง</small></div></div>
+      <div class="oapin ${air}"><b class="oapill">${esc(pill)}</b>${cur?`<span>${esc(cur.team)}</span>`:''}</div>
       <div class="oastat" id="oastat">${oaStatHtml()}</div>
     </header>
-    <div class="oaalerts" id="oaalerts">${oaAlertHtml()}</div>
-    <div class="oahero">
+    <div class="oaalerts" id="oaalerts">${oaAlertHtml()}</div></div>
+    <div class="oahero ${air}">
       <div class="oahero-l">
-        <div class="eyebrow2">${esc(state)}</div>
-        ${cur?`<h1>${esc(cur.team)}</h1><div class="oahb"><span>FIELD<b>${esc(cur.field)}</b></span><span>ROUND<b>${esc(cur.round)}</b></span><span>EVENT<b>${esc(cur.prog)}</b></span><span>TIME<b class="mono" id="oaclock">00:00.00</b></span></div>`
+        <div class="eyebrow2">${esc(pill)}</div>
+        ${cur?`<h1>${esc(cur.team)}</h1><div class="oahb"><span>FIELD<b>${esc(cur.field)}</b></span>${cur.round?`<span>ROUND<b>${esc(cur.round)}</b></span>`:''}<span>EVENT<b>${esc(cur.prog)}</b></span><span>TIME<b class="mono" id="oaclock">00:00.00</b></span></div>`
           :`<h1 class="muted">${ready.length?`พร้อมเล่น ${ready.length} แมตช์`:'ยังไม่มีแมตช์ที่พร้อม'}</h1>`}
       </div>
       ${cur?`<div class="oascore"><span>SCORE</span><b class="mono" id="oascore">${esc(OA.shown)}</b></div>`:''}
@@ -2315,7 +2325,7 @@ function vOnair(){
     ${H.error?`<div class="callout bad small">${esc(H.error)}<br>แก้บรรทัด MATCHES ใน open_Studio.cmd แล้วเปิดใหม่</div>`:''}
     <div class="oagrid">
       <div class="oacol">
-        <div class="panel"><div class="oah"><i></i>PLAYOUT · คุมการเล่น <span class="oakeys">Space เริ่ม/หยุด · B พักเบรก · 1 2 3 ฉาก</span></div>
+        <div class="panel"><div class="oah"><i></i>PLAYOUT · คุมการเล่น <span class="oakeys">Space เริ่ม/หยุด · B พักเบรก · 1–4 ฉาก</span></div>
           <div class="row oactl">
             ${OA.phase==='play'?`<button class="btn" data-act="oapause" ${OA.offAir?'disabled':''}>${OA.paused?'▶ เล่นต่อ':'⏸ หยุดชั่วคราว'}</button><button class="btn" data-act="oaskip">⏭ จบคลิปนี้</button>`
               :`<button class="btn pri" data-act="oago" ${ready.length&&on?'':'disabled'}>▶ เริ่มเล่นคิว</button>`}
@@ -2373,8 +2383,8 @@ function vOnair(){
         <div class="panel"><div class="oah"><i></i>QUEUE · คิว <span class="mono">${ready.length}</span></div>${(()=>{
           // a programme lock is never silent: what it hides, and one click to show everything again
           if(OA.prog==='all')return'';const hid=OA.list.filter(m=>!OA.played.has(m.id)&&oaGroup(m)!==OA.prog).length;
-          return`<div class="oaal warn"><b>▲ ล็อกคิวไว้เฉพาะ ${esc(OA.prog)}</b><span>${hid?`ซ่อนอยู่ ${hid} แมตช์จากรายการอื่น`:'ไม่มีแมตช์รายการอื่นรออยู่'}</span><button class="btn sm" data-act="oaprogall">แสดงทุกรายการ</button></div>`})()}${ready.length?ready.map((m,i)=>row(m,i,'ready')).join(''):'<p class="small muted" style="margin:0">ว่าง · แมตช์ที่ยืนยันผลแล้วจะเข้ามาเอง</p>'}</div>
-        ${wait.length?`<div class="panel"><div class="oah"><i></i>WAITING · รอ <span class="mono">${wait.length}</span></div>${wait.map((m,i)=>row(m,i,'wait')).join('')}</div>`:''}
+          return`<div class="oaal warn"><b>▲ ล็อกคิวไว้เฉพาะ ${esc(OA.prog)}</b><span>${hid?`ซ่อนอยู่ ${hid} แมตช์จากรายการอื่น`:'ไม่มีแมตช์รายการอื่นรออยู่'}</span><button class="btn sm" data-act="oaprogall">แสดงทุกรายการ</button></div>`})()}${keep(ready,'ready').length?keep(ready,'ready').map((m,i)=>row(m,i,'ready')).join(''):'<p class="small muted" style="margin:0">ว่าง · แมตช์ที่ยืนยันผลแล้วจะเข้ามาเอง</p>'}</div>
+        ${keep(wait,'wait').length?`<div class="panel"><div class="oah"><i></i>WAITING · รอ <span class="mono">${wait.length}</span></div>${keep(wait,'wait').map((m,i)=>row(m,i,'wait')).join('')}</div>`:''}
         ${done.length?`<details class="panel"><summary class="oah"><i></i>PLAYED · เล่นแล้ว <span class="mono">${done.length}</span></summary>${done.map((m,i)=>row(m,i,'done')).join('')}</details>`:''}
       </div>
     </div>
@@ -2552,8 +2562,8 @@ document.addEventListener('click',e=>{
     case'oaidle':oaIdle();return;
     case'oaup':oaMove(b.dataset.v,-1);break;
     case'oadown':oaMove(b.dataset.v,1);break;
-    case'oadrop':OA.played.add(b.dataset.v);oaKeep();break;
-    case'oaagain':OA.played.delete(b.dataset.v);oaKeep();break;
+    case'oadrop':OA.played.add(b.dataset.v);OA.undo=b.dataset.v;OA.undoK=b.dataset.k;clearTimeout(OA.undoT);OA.undoT=setTimeout(()=>{OA.undo=null;if(S.ui.view==='onair')render()},15000);oaKeep();break;
+    case'oaagain':OA.played.delete(b.dataset.v);if(OA.undo===b.dataset.v)OA.undo=null;oaKeep();break;
     case'oaretry':OA.bad.delete(b.dataset.v);break;
     case'oabrk':oaBreak();return;
     case'oahl':oaHlStart(OA.hlGroup,OA.hlRound);return;
