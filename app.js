@@ -2001,13 +2001,15 @@ async function obsStat(){
   try{const outs=(await OBS.req('GetOutputList')).outputs||[],net=outs.filter(o=>/rtmp|stream/i.test(o.outputKind||'')&&!/record|virtual|replay/i.test(o.outputName||''));
     const st=await Promise.all(net.filter(o=>o.outputActive).map(o=>OBS.req('GetOutputStatus',{outputName:o.outputName}).then(x=>({name:o.outputName,...x})).catch(()=>null)));
     OA.outs=st.filter(Boolean);
-    if(OA.outs.length){OA.wasLive=true;OA.liveAt=Date.now()}}catch(e){}
+    if(OA.outs.length&&Date.now()-(OA.liveOff||0)>5000){OA.wasLive=true;OA.liveAt=Date.now()}}catch(e){}
   if(!OA.fps){try{const v=await OBS.req('GetVideoSettings');OA.fps=v.fpsNumerator/(v.fpsDenominator||1)}catch(e){}}
   oaAlerts();
   const el=document.getElementById('oastat');if(el)el.innerHTML=oaStatHtml();
 }
 // warnings at the top of the desk, worst first, each with what to do; a warning can be put away for 10 minutes
 const OA_MUTE={};
+// the live went out and then stopped while the desk did not stop it: the audience sees nothing
+const oaDead=()=>!!(OBS.ok&&OA.wasLive&&!OA.outs?.length&&!OA.stat?.s?.outputActive);
 function oaAlerts(){
   const a=[],now=Date.now(),H=OA.H||{},dr=H.drive||null,x=OA.stat;
   const add=(key,lvl,text,todo,act)=>{if(!(OA_MUTE[key]>now))a.push({key,lvl,text,todo,act})};
@@ -2016,7 +2018,7 @@ function oaAlerts(){
     if(!OA.obsWant&&!OBS.ok)add('obsfirst','warn','ยังไม่ได้ต่อ OBS','ปุ่มออกอากาศจะกดได้หลังต่อ OBS','oaconnect');
     if(OA.obsWant&&!OBS.ok)add('obs','bad','OBS ไม่ได้ต่ออยู่','เปิด OBS ก่อน แล้วกดต่อใหม่','oareconnect');
     if(!OA.helperOk)add('helper','bad','ตัวช่วยห้องส่งไม่ตอบ: คลิปใหม่จะไม่เข้า','ดับเบิลคลิก open_Studio.cmd (ไม่ต้องปิด OBS)');
-    if(OBS.ok&&OA.wasLive&&!OA.outs?.length&&!x?.s?.outputActive)add('live','bad','ไลฟ์หยุดส่งภาพแล้ว (ทุกช่อง)','ถ้าไม่ได้ตั้งใจหยุด: เช็กเน็ต แล้วกด Start ใน OBS หรือ Start all ในกล่อง Multiple output');
+    if(oaDead())add('live','bad','ไลฟ์หยุดส่งภาพแล้ว (ทุกช่อง)','ถ้าไม่ได้ตั้งใจหยุด: เช็กเน็ต แล้วกดเริ่มไลฟ์ หรือ Start all ในกล่อง Multiple output','oastream');
     const drops=[...(OA.outs||[]),...(x?.s?.outputActive?[{name:'stream',...x.s}]:[])].map(o=>o.outputTotalFrames>300?o.outputSkippedFrames/o.outputTotalFrames*100:0);
     if(drops.some(d=>d>2))add('drop','warn',`ภาพไลฟ์กระตุก: เฟรมหลุด ${Math.max(...drops).toFixed(1)}%`,'เน็ตส่งไม่ทัน: ลด Bitrate ใน OBS (Settings → Output) เช่น 9000 → 6000');
     if(x?.g&&x.g.cpuUsage>85)add('cpu','warn',`เครื่องทำงานหนัก CPU ${Math.round(x.g.cpuUsage)}%`,'ปิดโปรแกรมอื่นที่ไม่ใช้ (เบราว์เซอร์แท็บเยอะ, เกม)');
@@ -2026,10 +2028,11 @@ function oaAlerts(){
     if(H.mediamtx===false)add('osmo','warn','ตัวรับภาพกล้อง Osmo (MediaMTX) ไม่ได้เปิด','ดับเบิลคลิก open_Studio.cmd ใหม่ จะเปิดให้เอง');
     if(H.diskFree!=null&&H.diskFree<10e9)add('disk','warn',`ที่ว่างในเครื่องเหลือ ${(H.diskFree/1e9).toFixed(1)} GB`,'ลบคลิปเก่าใน C:\\work\\stream-tools\\cache หรือไฟล์อัดเก่าใน Videos');
   }catch(e){console.warn('alerts',e)}
-  const sig=a.map(x=>x.key+x.text).join('|');OA.alerts=a;
+  const sig=a.map(x=>x.key+x.text).join('|'),dead=oaDead();OA.alerts=a;
+  if(dead!==!!OA.dead){OA.dead=dead;if(S.ui.view==='onair')render()}
   if(sig!==OA.alertSig){OA.alertSig=sig;const el=document.getElementById('oaalerts');if(el)el.innerHTML=oaAlertHtml()}
 }
-const oaAlertHtml=()=>(OA.alerts||[]).map(x=>`<div class="oaal ${x.lvl}"><b>${x.lvl==='bad'?'●':'▲'} ${esc(x.text)}</b><span>${esc(x.todo)}</span>${x.act?`<button class="btn sm pri" data-act="oaconnect">${x.act==='oareconnect'?'↻ ต่อใหม่':'🔌 ต่อ OBS'}</button>`:''}<button class="btn sm" data-act="oamute" data-v="${x.key}">รับทราบ 10 นาที</button></div>`).join('');
+const oaAlertHtml=()=>(OA.alerts||[]).map(x=>`<div class="oaal ${x.lvl}"><b>${x.lvl==='bad'?'●':'▲'} ${esc(x.text)}</b><span>${esc(x.todo)}</span>${x.act?`<button class="btn sm pri" data-act="${x.act==='oastream'?'oastream':'oaconnect'}">${x.act==='oastream'?'● เริ่มไลฟ์':x.act==='oareconnect'?'↻ ต่อใหม่':'🔌 ต่อ OBS'}</button>`:''}<button class="btn sm" data-act="oamute" data-v="${x.key}">รับทราบ 10 นาที</button></div>`).join('');
 function oaStatHtml(){
   const x=OA.stat;if(!OBS.ok||!x)return'';
   const drop=x.s.outputTotalFrames?x.s.outputSkippedFrames/x.s.outputTotalFrames*100:0,tc=t=>esc((t||'00:00:00').split('.')[0]);
@@ -2285,9 +2288,9 @@ function vOnair(){
   const state=OA.phase==='play'?(OA.offAir?'รอกลับฉากรีเพลย์':OA.paused?'PAUSED · หยุดชั่วคราว':OA.cover?'GET READY · บังช่วงเตรียมหุ่น':'ON AIR · กำลังเล่น'):OA.phase==='load'?'LOADING · กำลังเปิดคลิป':OA.phase==='hl'?'HIGHLIGHT · กำลังเล่นไฮไลต์':OA.phase==='result'?'RESULT · ขึ้นผลการแข่ง':OA.phase==='next'?'NEXT · ขึ้นทีมถัดไป':OA.phase==='blk'?'TITLE · ขึ้นชื่อรายการ':OA.phase==='adv'?'ADVANCE · ขึ้นป้ายเข้ารอบ':OA.hold?'HOLD · รอกลับฉากรีเพลย์':'STAND BY · หน้าพัก';
   // the colour of the desk follows what goes out: red while a match plays, amber while it is held or on a break
   // OBS gone while the desk was in use comes first: nothing below can be trusted to be going out
-  const run=['play','load','hl','result','next','blk','adv'].includes(OA.phase),lost=OA.obsWant&&!on,
-    air=lost?'off':OA.brk?'hold':run?(OA.phase==='play'&&(OA.offAir||OA.paused||OA.cover)?'hold':'on'):(OA.hold?'hold':''),
-    pill=lost?'OBS หลุด · ยังไม่ได้ต่อ':OA.brk?'BREAK · พักเบรก':state;
+  const run=['play','load','hl','result','next','blk','adv'].includes(OA.phase),lost=OA.obsWant&&!on,dead=oaDead(),
+    air=lost||dead?'off':OA.brk?'hold':run?(OA.phase==='play'&&(OA.offAir||OA.paused||OA.cover)?'hold':'on'):(OA.hold?'hold':''),
+    pill=lost?'OBS หลุด · ยังไม่ได้ต่อ':dead?'ไลฟ์หลุด · คนดูไม่เห็นภาพ':OA.brk?'BREAK · พักเบรก':state;
   // a match just taken out keeps its place in its list for a few seconds, as a row that offers to take it back
   const gone=OA.undo&&OA.played.has(OA.undo)?OA.list.find(m=>m.id===OA.undo):null,pos=id=>OA.order.indexOf(id),
     keep=(l,k)=>{if(!gone||OA.undoK!==k)return l;const i=l.filter(m=>pos(m.id)<pos(gone.id)).length;return[...l.slice(0,i),gone,...l.slice(i)]};
@@ -2552,11 +2555,11 @@ document.addEventListener('click',e=>{
     case'oafield':OA.field.main=b.dataset.v;oaKeep();oaFieldPick();return;
     case'oaflay':OA.field.layout=b.dataset.v==='one'?'one':'big';oaKeep();oaFieldPick();oaDraw();return;
     case'oascene':OBS.req('SetCurrentProgramScene',{sceneName:b.dataset.v}).catch(e=>toast('สลับฉากไม่ได้: '+e.message));return;
-    case'oastream':{const on=OA.stat?.s?.outputActive;if(on&&!confirm('หยุดไลฟ์ตอนนี้?'))return;OBS.req(on?'StopStream':'StartStream').then(()=>toast(on?'หยุดไลฟ์แล้ว':'เริ่มไลฟ์แล้ว')).catch(e=>toast('ไลฟ์ไม่ได้: '+e.message));return}
+    case'oastream':{const on=OA.stat?.s?.outputActive;if(on&&!confirm('หยุดไลฟ์ตอนนี้?'))return;if(on){OA.wasLive=false;OA.liveOff=Date.now()}OBS.req(on?'StopStream':'StartStream').then(()=>toast(on?'หยุดไลฟ์แล้ว':'เริ่มไลฟ์แล้ว')).catch(e=>toast('ไลฟ์ไม่ได้: '+e.message));return}
     case'oarec':{const on=OA.stat?.r?.outputActive;OBS.req(on?'StopRecord':'StartRecord').then(()=>toast(on?'หยุดอัดแล้ว':'เริ่มอัดแล้ว')).catch(e=>toast('อัดไม่ได้: '+e.message));return}
     // start means start: when OBS shows another scene, the replay scene comes up and the queue begins on it
     case'oago':OA.wantRun=true;if(OA.scene&&OA.scene!==OA_SCENE){OA.hold=true;OBS.req('SetCurrentProgramScene',{sceneName:OA_SCENE}).catch(e=>toast('สลับฉากไม่ได้: '+e.message))}else oaNext();return;
-    case'oaplay':oaPlay(OA.list.find(x=>x.id===b.dataset.v));return;
+    case'oaplay':{const m=OA.list.find(x=>x.id===b.dataset.v);if((OA.phase==='play'||OA.phase==='load')&&OA.cur&&OA.cur!==m&&!confirm('ตัดคลิปที่กำลังเล่นอยู่ แล้วเล่นแมตช์นี้แทน?'))return;oaPlay(m);return}
     case'oapause':oaMedia(OA.paused?'PLAY':'PAUSE').then(()=>{OA.paused=!OA.paused;render()});return;
     case'oaskip':oaDone();return;
     case'oaidle':oaIdle();return;
