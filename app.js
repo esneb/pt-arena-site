@@ -1978,7 +1978,7 @@ function oaBoardSay(force){
   // atmosphere: the newest clips of the broll folder (at most 20), played by the window itself from the helper
   const list=mode==='rank'?oaRank():mode==='live'?oaLive():mode==='broll'?(OA.H?.broll||[]).slice(0,40).map(f=>OA_HELPER+'/broll/'+encodeURIComponent(f))
     :oaBracket().filter(b=>b.groups||b.left.length||b.right.length||b.final),has=list.length>0;
-  const m={theme:OA.theme,mode,brackets:mode==='bracket'?list:[],rank:mode==='rank'?list:[],live:mode==='live'?list:[],broll:mode==='broll'?list:[],vol:OA.brollVol,error:mode==='rank'||mode==='broll'?'':OA.boardErr,sub:VENUES.find(v=>v[0]===S.venue)[1],t:Date.now()},
+  const m={theme:OA.theme,mode,brackets:mode==='bracket'?list:[],rank:mode==='rank'?list:[],live:mode==='live'?list:[],broll:mode==='broll'?list:[],shown:has,vol:OA.brollVol,error:mode==='rank'||mode==='broll'?'':OA.boardErr,sub:VENUES.find(v=>v[0]===S.venue)[1],t:Date.now()},
     sig=JSON.stringify({...m,t:0});
   if(force||sig!==OA.boardSig){OA.boardSig=sig;OBS.say('board',m)}
   if(has!==OA.boardHas){OA.boardHas=has;oaBrkVis();oaDraw()}

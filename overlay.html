@@ -18,12 +18,15 @@ iframe.on{opacity:1}
 <script>
 const opt=Object.fromEntries(new URLSearchParams(location.hash.slice(1)));
 const THEMES=['sports','esports','minimal','thaitv','arcade','poster','blueprint','playful','cinema','light'];
-let theme=THEMES.includes(opt.theme)?opt.theme:'sports',last=null,frame=null;
+let theme=THEMES.includes(opt.theme)?opt.theme:'sports',last=null,frame=null,board=false;
+// the break window shows the sponsors or, in their place, the board: the theme's "sponsor" caption goes while the board is up
+function cap(w){try{const d=w.document;if(!d.getElementById('pt-cap')){const s=d.createElement('style');s.id='pt-cap';
+  s.textContent='.pt-board [data-sponsor]{visibility:hidden!important}';d.head.append(s)}d.documentElement.classList.toggle('pt-board',board)}catch(e){}}
 // a theme loads in its own iframe; once its fonts are in it gets the state on screen, then it fades in over the old one
 function load(name){
   const f=document.createElement('iframe');f.setAttribute('allowtransparency','true');f.src='themes/'+name+'.html?v='+(opt.v||Date.now());
   f.onload=()=>{const w=f.contentWindow;
-    const go=()=>{if(last)try{w.show(last)}catch(e){console.warn('theme',name,e)}
+    const go=()=>{cap(w);if(last)try{w.show(last)}catch(e){console.warn('theme',name,e)}
       // a timer, not requestAnimationFrame: a hidden page (OBS with the source inactive) never paints a frame
       setTimeout(()=>{f.classList.add('on');const old=frame;frame=f;if(old&&old!==f)setTimeout(()=>old.remove(),500)},30)};
     (w.document.fonts?w.document.fonts.ready:Promise.resolve()).then(go,go)};
@@ -32,6 +35,7 @@ function load(name){
 function show(m){
   if(m.k==='theme'){if(m.name&&THEMES.includes(m.name)&&m.name!==theme){theme=m.name;load(theme)}return}
   if(m.k==='score'||m.k==='hello')return;
+  if(m.k==='board'){board=m.mode!=='off'&&m.shown!==false;if(frame)cap(frame.contentWindow);return}
   last=m;if(frame)try{frame.contentWindow.show(m)}catch(e){console.warn('theme',theme,e)}
 }
 load(theme);
