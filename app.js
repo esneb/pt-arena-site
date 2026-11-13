@@ -1618,7 +1618,8 @@ function oaParseRec(d,rel){
   const num=(v,f=0)=>isFinite(+v)&&v!==null&&v!==''?+v:f,str=v=>v==null?'':String(v),t=v=>{const x=Date.parse(v);return isFinite(x)?x:null};
   const id=str(d.recordingId),tails=['.webm','.mp4'].map(e=>('_'+id+e).toLowerCase()),dir=rel.join('/'),view=d.recordingView||{};
   const clip=OA.webm.find(x=>tails.some(e=>x.toLowerCase().endsWith(e))&&x.slice(0,x.lastIndexOf('/')+1)===(dir?dir+'/':''))||'';
-  const replaced=!!d.supersededByAttemptId||!!(d.currentAttemptId&&d.attemptId&&d.currentAttemptId!==d.attemptId);
+  // RoboArena wiped this result (the match was reset and run again): it is gone, like one replaced by a later attempt
+  const replaced=d.resultStatus==='historical-reset'||!!d.supersededByAttemptId||!!(d.currentAttemptId&&d.attemptId&&d.currentAttemptId!==d.attemptId);
   const teams=d.participants.map(p=>({teamId:str(p.teamId),name:str(p.team||p.teamId),school:str(p.school),side:str(p.side),
     score:p.score==null||p.score===''?null:num(p.score),timeMs:p.timeMs==null?null:num(p.timeMs),winner:p.winner===true,vside:str(p.videoSide),
     sw:p.seriesWins==null?null:num(p.seriesWins),swin:p.seriesWinner===true}));
@@ -1654,15 +1655,16 @@ function oaBare(path){
 // tools/studio_helper.py (started by open_Studio.cmd) reads the match folder for the desk and hands over every result
 // file, as it is, and which files have stopped growing. The match folder is set only there.
 function oaScan(){
-  const out=new Map();
+  const out=new Map(),gone=[];
   // RoboArena uploads its trial recordings into folders named for tests ("RoboArena LAB - isolated test recordings",
   // "Integration Tests"); the real ones sit at the top. Those stay off the queue unless the desk asks for them, for a rehearsal.
   const test=r=>/test|lab/i.test(r[0]||'');
-  for(const f of OA.files){if(test(f.rel)&&!OA.tests)continue;try{const m=oaParse(JSON.parse(f.text),f.rel);m.src=String(f.name||'');const o=out.get(m.id);
+  for(const f of OA.files){if(test(f.rel)&&!OA.tests)continue;try{const m=oaParse(JSON.parse(f.text),f.rel);m.src=String(f.name||'');const o=out.get(m.id);if(m.rec&&m.replaced)gone.push(m.id.slice(4).toLowerCase());
     if(m.id&&(m.file||m.rec)&&!m.replaced&&(!o||(/\.recording\.json$/i.test(m.src)&&!/\.recording\.json$/i.test(o.src))))out.set(m.id,m)}catch(e){}}
   // a result file whose clip has not arrived yet waits; a clip whose result file has not arrived plays on its own
   const clips=new Set(OA.webm);
-  const recIds=[...out.values()].filter(m=>m.rec).map(m=>m.id.slice(4).toLowerCase());
+  // the clip of a dropped result stays out too: it must not come back as a clip with no result
+  const recIds=[...[...out.values()].filter(m=>m.rec).map(m=>m.id.slice(4).toLowerCase()),...gone].filter(Boolean);
   // two pictures of one run: the straightened one (after-perspective) stays, the other is left out
   const best=new Set([...out.values()].filter(m=>m.set&&m.view==='after-perspective').map(m=>m.set));
   for(const[k,m]of out)if(m.set&&best.has(m.set)&&m.view!=='after-perspective')out.delete(k);
@@ -1899,25 +1901,31 @@ function oaBracket(){
     const team=Object.fromEntries((br.teams||[]).map(t=>[t.teamId,t])),all={},next={};
     const fin=br.finals||[],last=fin[fin.length-1],games=last?.matches||[],gameIds=new Set(games.map(m=>m.id));
     [...(br.groups||[]).flatMap(g=>g.rounds||[]),...fin].forEach(r=>(r.matches||[]).forEach(m=>{all[m.id]=m;
-      (m.slots||[]).forEach(s=>{if(s.fromMatchId)next[s.fromMatchId]=gameIds.has(m.id)?'final':m.id})}));
+      (m.slots||[]).forEach(s=>{if(s.fromMatchId&&s.outcome!=='loser')next[s.fromMatchId]=gameIds.has(m.id)?'final':m.id})}));
     // a winner counts only once its clip has been on air; until then the next round shows where the team will come from
     const shown=m=>m&&m.winnerTeamId&&aired.has(m.id)?m.winnerTeamId:null;
     // the match that decides a group: its winner is "แชมป์สาย X"
     const roundOf={};fin.forEach(r=>(r.matches||[]).forEach(m=>{roundOf[m.id]=r.label||''}));
     const groupTop=new Set((br.groups||[]).flatMap(g=>{const rs=g.rounds||[];return(rs[rs.length-1]?.matches||[]).map(m=>m.id)}));
-    const slot=s=>{if(s.teamId)return{id:s.teamId};if(s.bye)return{id:null,bye:true};const src=all[s.fromMatchId],w=shown(src);
-      return w?{id:w}:{id:null,from:!src?'':groupTop.has(src.id)?`แชมป์สาย ${src.group}`:src.group?`ผู้ชนะคู่ ${src.number} สาย ${src.group}`:`ผู้ชนะ${(roundOf[src.id]||'').replace(/^รอบ/,'')} คู่ ${src.number}`}};
+    // a round-robin group: its table is RoboArena's own, shown once every decided match of the group has been on air
+    const G=br.groups||[],rr=G.some(g=>Array.isArray(g.standings)),gm=g=>(g.rounds||[]).flatMap(r=>r.matches||[]);
+    const gOpen=g=>gm(g).every(m=>!m.winnerTeamId||aired.has(m.id));
+    const slot=s=>{if(s.fromGroup){const g=G.find(x=>x.id===s.fromGroup),hit=g&&g.complete?(g.standings||[]).filter(x=>x.rank===s.rank):[];
+        const id=g&&gOpen(g)?(s.teamId||(hit.length===1?hit[0].teamId:null)):null;return id?{id}:{id:null,from:`ที่ ${s.rank} สาย ${s.fromGroup}`}}
+      if(s.teamId)return{id:s.teamId};if(s.bye)return{id:null,bye:true};const src=all[s.fromMatchId],w=shown(src);
+      return w?{id:w}:{id:null,from:!src?'':groupTop.has(src.id)?`แชมป์สาย ${src.group}`:src.group?`ผู้ชนะคู่ ${src.number} สาย ${src.group}`:`ผู้ชนะ${(roundOf[src.id]||'').replace(/^รอบ(?![\s\d])/,'')} คู่ ${src.number}`}};
     const side=(s,w)=>({name:s.id?(team[s.id]?.team||s.id):'',from:s.bye?'BYE':(s.from||''),win:w&&s.id?w===s.id:null});
     const match=m=>{const sl=(m.slots||[]).map(slot),bye=sl.find(x=>x.bye),walk=bye&&sl.find(x=>x.id);
       // a bye is no match: the team goes through, which gives nothing away
       const w=walk?walk.id:shown(m);
       return{id:m.id,next:next[m.id]||'',done:!!w,wait:!walk&&!!m.winnerTeamId&&!w,a:side(sl[0]||{},w),b:side(sl[1]||{},w)}};
     // the bracket in two halves facing each other, the final between them: each half is columns from the outside in
-    const G=br.groups||[],half=Math.ceil(G.length/2),depth=Math.max(0,...G.map(g=>(g.rounds||[]).length));
+    const half=Math.ceil(G.length/2),depth=Math.max(0,...G.map(g=>(g.rounds||[]).length));
     const cols=gs=>Array.from({length:depth},(_,i)=>{const rs=gs.map(g=>(g.rounds||[])[i]).filter(Boolean);
       return{label:rs.length===1?rs[0].label||'':gs.map(g=>g.label).join(' · '),matches:rs.flatMap(r=>(r.matches||[]).map(match))}}).filter(c=>c.matches.length);
-    const left=cols(G.slice(0,half)),right=cols(G.slice(half));
-    fin.slice(0,-1).forEach(r=>{const ms=(r.matches||[]).map(match),h=Math.ceil(ms.length/2);
+    const left=rr?[]:cols(G.slice(0,half)),right=rr?[]:cols(G.slice(half));
+    // the third-place match hangs off the tree (the losers of the semi-finals): it is not drawn
+    fin.slice(0,-1).filter(r=>!(r.matches||[]).every(m=>m.stageType==='bronze'||(m.slots||[]).some(s=>s.outcome==='loser'))).forEach(r=>{const ms=(r.matches||[]).map(match),h=Math.ceil(ms.length/2);
       left.push({label:r.label||'',matches:ms.slice(0,h)});if(ms.length>h)right.push({label:r.label||'',matches:ms.slice(h)})});
     // the final: one box; a best-of series counts each side's wins from the games already on air
     let final=null;
@@ -1926,7 +1934,18 @@ function oaBracket(){
       const cnt=i=>best>1&&sl[i]?.id?wins[i]:null;
       final={label:last.label||'รอบชิงชนะเลิศ',bestOf:best,champion:champ?(team[champ.id]?.team||champ.id):'',
         wait:games.some(g=>g.winnerTeamId&&!aired.has(g.id)),a:{...side(sl[0]||{},champ?.id),wins:cnt(0)},b:{...side(sl[1]||{},champ?.id),wins:cnt(1)}}}
-    return{comp,title:(b.competitions||{})[comp]||comp.toUpperCase(),left,right,final}}catch(e){console.warn('bracket',comp,e);return null}}).filter(Boolean);
+    const title=(b.competitions||{})[comp]||comp.toUpperCase(),tree={comp,title,left,right,final};
+    if(!rr)return tree;
+    // played, wins, score and rank are RoboArena's numbers as they are. While a decided match of the group is still to go
+    // on air, only the matches already shown are counted (played, wins) and the score and rank stay blank
+    const tabs=G.map(g=>{const open=gOpen(g),seen=gm(g).filter(m=>m.winnerTeamId&&aired.has(m.id)),st=g.standings||[],tid=s=>s.teamId||s.seedTeamId;
+      const q=new Set((g.qualifiers||[]).map(x=>x&&x.teamId||x));
+      const rows=open&&st.length?st.map(x=>({team:x.team||team[x.teamId]?.team||x.teamId,school:x.school||'',played:x.played??0,wins:x.wins??0,score:x.score??'',rank:x.rank??'',q:q.has(x.teamId)}))
+        :(g.teamIds||[]).map(id=>{const x=st.find(y=>y.teamId===id)||team[id]||{};
+          return{team:x.team||id,school:x.school||'',played:seen.filter(m=>(m.slots||[]).some(s=>tid(s)===id)).length,wins:seen.filter(m=>m.winnerTeamId===id).length,score:'',rank:'',q:false}});
+      return{label:g.label||('สาย '+g.id),rows}}).filter(t=>t.rows.length);
+    const pages=[];for(let i=0;i<tabs.length;i+=4)pages.push({comp,title,groups:tabs.slice(i,i+4),left:[],right:[],final:null});
+    return[...pages,tree]}catch(e){console.warn('bracket',comp,e);return null}}).flat().filter(Boolean);
 }
 // the solo programmes (rescue, delivery): each team's two rounds and its best, from the runs already on air only
 function oaRank(){
@@ -1958,7 +1977,7 @@ function oaBoardSay(force){
   const mode=OA.brkShow==='ads'?'bracket':OA.brkShow;
   // atmosphere: the newest clips of the broll folder (at most 20), played by the window itself from the helper
   const list=mode==='rank'?oaRank():mode==='live'?oaLive():mode==='broll'?(OA.H?.broll||[]).slice(0,40).map(f=>OA_HELPER+'/broll/'+encodeURIComponent(f))
-    :oaBracket().filter(b=>b.left.length||b.right.length||b.final),has=list.length>0;
+    :oaBracket().filter(b=>b.groups||b.left.length||b.right.length||b.final),has=list.length>0;
   const m={theme:OA.theme,mode,brackets:mode==='bracket'?list:[],rank:mode==='rank'?list:[],live:mode==='live'?list:[],broll:mode==='broll'?list:[],vol:OA.brollVol,error:mode==='rank'||mode==='broll'?'':OA.boardErr,sub:VENUES.find(v=>v[0]===S.venue)[1],t:Date.now()},
     sig=JSON.stringify({...m,t:0});
   if(force||sig!==OA.boardSig){OA.boardSig=sig;OBS.say('board',m)}
@@ -2165,11 +2184,12 @@ function oaAdvance(m){
       const prog=(OA.board.competitions||{})[comp]||m.prog;
       // the final: a series; the card comes only with the game that wins it
       if(me.series){const s=m.series;return s&&s.winner?{eyebrow:'แชมป์',tag:'CHAMPION',title:s.winner,sub:`คว้าแชมป์ ${prog} · ซีรีส์ ${s.wins.join('–')}`}:null}
-      const nx=rounds.flatMap(r=>r.matches||[]).find(x=>(x.slots||[]).some(sl=>sl.fromMatchId===me.id));if(!nx)return null;
+      const nx=rounds.flatMap(r=>r.matches||[]).find(x=>(x.slots||[]).some(sl=>sl.fromMatchId===me.id&&sl.outcome!=='loser'));if(!nx)return null;
       const other=(nx.slots||[]).find(sl=>sl.fromMatchId!==me.id)||{},team=id=>(br.teams||[]).find(t=>t.teamId===id)?.team||id;
       const src=other.fromMatchId&&all[other.fromMatchId],ow=src&&src.winnerTeamId&&aired.has(src.id)?src.winnerTeamId:null;
       const top=new Set((br.groups||[]).flatMap(g=>{const rs=g.rounds||[];return(rs[rs.length-1]?.matches||[]).map(x=>x.id)}));
-      const vs=other.teamId?team(other.teamId):ow?team(ow):src?(top.has(src.id)?`แชมป์สาย ${src.group}`:src.group?`ผู้ชนะคู่ ${src.number} สาย ${src.group}`:`ผู้ชนะ${(roundOf[src.id]||'').replace(/^รอบ/,'')} คู่ ${src.number}`):'';
+      // the other side comes from a group table: its name is not given here, its place in the group is
+      const vs=other.fromGroup?`ที่ ${other.rank} สาย ${other.fromGroup}`:other.teamId?team(other.teamId):ow?team(ow):src?(top.has(src.id)?`แชมป์สาย ${src.group}`:src.group?`ผู้ชนะคู่ ${src.number} สาย ${src.group}`:`ผู้ชนะ${(roundOf[src.id]||'').replace(/^รอบ(?![\s\d])/,'')} คู่ ${src.number}`):'';
       return{eyebrow:'เข้ารอบ',tag:'ADVANCES',title:w.name,sub:['→ '+(roundOf[nx.id]||'รอบต่อไป'),vs?'พบ '+vs:''].filter(Boolean).join(' · ')};
     }
   }catch(e){console.warn('advance',e)}

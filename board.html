@@ -90,6 +90,22 @@ svg.ln path.won{stroke:var(--accent)}
 .fc .tm .n small{display:block;font-size:12px;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .fc .tm .sc{font-family:Oxanium;font-weight:800;font-size:30px}
 .fc .tm .sc small{font-size:14px;color:var(--mute);font-weight:600}
+/* group stage: one table per group, two across: place · team and school · played · wins · score */
+.gp{position:absolute;inset:0;display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:minmax(0,1fr);gap:14px 16px}
+.gp.one{grid-template-columns:1fr}
+.gc{background:var(--panel);border:1px solid var(--line);border-radius:8px;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.gr{flex:1 1 0;display:grid;grid-template-columns:28px 1fr 48px 48px 64px;align-items:center;gap:0 10px;padding:0 16px;min-height:0}
+.gr+.gr{border-top:1px solid var(--line)}
+.gr.h{flex:0 0 32px;grid-template-columns:1fr 48px 48px 64px;font-size:12px;font-weight:600;color:var(--mute)}
+.gr.h b{font-size:15px;font-weight:700;color:var(--accent)}
+.gr .no{font-family:Oxanium;font-weight:800;font-size:20px;color:var(--mute)}
+.gr.q .no{color:var(--accent)}
+.gr .nm{min-width:0}
+.gr .nm b{display:block;font-size:15px;font-weight:600;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gr .nm small{display:block;font-size:12px;line-height:1.25;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gr .v{font-family:Oxanium;font-weight:600;font-size:17px;text-align:right;color:var(--mute)}
+.gr .v.b{font-weight:800;font-size:20px;color:var(--ink)}
+.gr.h .v{font-family:Prompt;font-size:12px;font-weight:600;color:var(--mute)}
 </style>
 </head>
 <body>
@@ -198,6 +214,17 @@ function drawBroll(p){
     box.insertBefore(v,lab)};
   box.append(lab);p.append(box);play();
 }
+// group stage: a table for each group; a blank place or score means a match of that group has not been on air yet
+function drawGroups(p,list,it){
+  const bd=head(p,'รอบแบ่งสาย · GROUPS',it.title,list),g=el('div','gp'+(it.groups.length===1?' one':''));
+  const dash=v=>v===''||v==null?'–':v;
+  it.groups.forEach(x=>{const c=el('div','gc'),h=el('div','gr h');
+    h.append(el('b','',x.label),el('span','v','แข่ง'),el('span','v','ชนะ'),el('span','v','คะแนน'));c.append(h);
+    x.rows.forEach(t=>{const r=el('div','gr'+(t.q?' q':'')),nm=el('span','nm');nm.append(el('b','',t.team),el('small','',t.school));
+      r.append(el('span','no',t.rank),nm,el('span','v',t.played),el('span','v b',t.wins),el('span','v',dash(t.score)));c.append(r)});
+    g.append(c)});
+  bd.append(g);
+}
 function drawNow(p){{
     p.textContent='';
     const mode=data&&data.mode;
@@ -206,6 +233,7 @@ function drawNow(p){{
     clearTimeout(brTimer);
     if(mode==='broll'){drawBroll(p);p.classList.add('on');return}
     const list=pages(),br=list[idx%Math.max(1,list.length)];
+    if(br&&br.groups){drawGroups(p,list,br);p.classList.add('on');return}
     const bd=head(p,'สายการแข่ง · BRACKET',br?br.title:'สายการแข่ง',list);
     if(!br){bd.append(el('div','empty',data&&data.error?'ยังดึงสายการแข่งไม่ได้':'ยังไม่มีสายการแข่ง'));p.classList.add('on');return}
     // the two halves of the bracket face each other, the final between them (columns come from the outside in)
