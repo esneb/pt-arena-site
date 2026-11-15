@@ -98,8 +98,8 @@ function queue(clsId){const r=curRound(clsId);if(!r)return[];return eligible(cls
 function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('on');clearTimeout(toast.h);toast.h=setTimeout(()=>t.classList.remove('on'),2400)}
 
 /* ---------- roles: the link decides what a device sees (#staff, #judge, #judge-A, #timer-A, #cam-A, #screen, #mc, none = viewers;
-   #cam-ROAM and #rx-ROAM: the walking camera for the stream, phone and OBS) ---------- */
-const ROAM='ROAM';
+   #cam-ROAM, #cam-ROAM2 .. #cam-ROAM4 and #rx-ROAM: the walking cameras for the stream, up to four phones, and OBS) ---------- */
+const ROAM='ROAM',ROAMS=[ROAM,'ROAM2','ROAM3','ROAM4'],ROAMCTL='ROAMCTL',isRoam=l=>ROAMS.includes(l),roamNo=l=>ROAMS.indexOf(l)+1;
 const ROLE_TABS={rx:['rx'],view:['team','board','field','live'],judge:['judge','board'],timer:['timer'],cam:['cam'],screen:['screen'],mc:['mc','board'],staff:['onair']};
 const STAFF_KEY='ptarena:staffcode',MYTEAM_KEY='ptarena:myteam',FIELD_KEY='ptarena:field';
 const rememberField=()=>{if(ROLE==='judge')try{localStorage.setItem(FIELD_KEY,S.ui.field)}catch(e){}};
@@ -109,7 +109,8 @@ function readHash(){
   if(m){ROLE=m[1].toLowerCase();LOCK=m[2].toUpperCase()}else{LOCK=null;ROLE=h==='staff'||h==='screen'||h==='mc'||h==='judge'?h:'view'}
   // the match day itself runs on RoboArena now; this site is only the broadcast desk and its walking camera, so every
   // other link lands on the staff code and then the desk
-  if(!((ROLE==='cam'||ROLE==='rx')&&LOCK===ROAM)){ROLE='staff';LOCK=null}
+  if(LOCK==='ROAM1')LOCK=ROAM;
+  if(!((ROLE==='cam'&&isRoam(LOCK))||(ROLE==='rx'&&LOCK===ROAM))){ROLE='staff';LOCK=null}
   // #judge without a field: the judge picks the field on the page, and this phone remembers it
   if(ROLE==='judge'&&!LOCK){try{S.ui.field=localStorage.getItem(FIELD_KEY)||S.ui.field}catch(e){}}
   if(ROLE!=='staff'){let q='';try{q=localStorage.getItem(MYTEAM_KEY)||''}catch(e){}S.ui.teamQuery=q}
@@ -162,7 +163,7 @@ function render(){
   if(!ROLE_TABS[ROLE].includes(S.ui.view))S.ui.view=ROLE_TABS[ROLE][0];
   renderShell();
   if(needGate()){$('#view').innerHTML=vGate();return}
-  if(LOCK&&LOCK!==ROAM&&!clsOfField(LOCK)){$('#view').innerHTML=`<div class="panel"><h2>ไม่พบสนาม ${esc(LOCK)}</h2><p class="muted">ขอลิงก์ใหม่จากแอดมิน</p></div>`;return}
+  if(LOCK&&!isRoam(LOCK)&&!clsOfField(LOCK)){$('#view').innerHTML=`<div class="panel"><h2>ไม่พบสนาม ${esc(LOCK)}</h2><p class="muted">ขอลิงก์ใหม่จากแอดมิน</p></div>`;return}
   if(LOCK)S.ui.field=LOCK;
   if(!clsOfField(S.ui.field))S.ui.field=fieldsSorted()[0].field;
   const v=S.ui.view;
@@ -923,29 +924,48 @@ function phoneMeter(){
     const el=$('#camreal');if(el)el.textContent='กล้องส่งภาพมา '+CAMREAL;
   },2000);
 }
-/* Walking camera for the stream: a phone opens #cam-ROAM (the same camera page as a field, same handshake), and OBS shows
-   #rx-ROAM as a Browser Source in the walking-camera scene. This page only shows the picture and plays its sound;
-   while no phone sends, it is see-through, so whatever sits under it in the scene shows. */
-const RX={pc:null,sid:'',un:null};
-const rxVideo=()=>{let v=document.getElementById('rxv');if(!v){v=document.createElement('video');v.id='rxv';v.playsInline=true;v.autoplay=true;v.hidden=true;document.body.append(v)}return v};
-function vRx(){
-  if(!RX.un)RX.un=rtcWatch(LOCK,d=>{
-    if(d&&d.bye&&d.bye===RX.sid){try{RX.pc?.close()}catch(e){}RX.pc=null;rxVideo().hidden=true;return}
-    if(d&&d.offer&&d.sid&&d.sid!==RX.sid&&Date.now()-(d.t||0)<120000)rxAnswer(d).catch(()=>{});
-  })||null;
-  rxVideo();return'';
+/* Walking cameras for the stream: each phone opens its own link (#cam-ROAM, #cam-ROAM2 .. #cam-ROAM4, the same camera page
+   as a field, same handshake), and OBS shows #rx-ROAM as one Browser Source in the walking-camera scene. That page holds
+   every phone that sends and shows one: the one the desk picked, or the first that is sending. The others stay linked,
+   silent, and are asked to send small, so a switch is instant and the Wi-Fi carries one full picture, not four.
+   While no phone sends the page is see-through, so whatever sits under it in the scene shows.
+   The desk and this page talk through one more note (ROAMCTL): the desk writes pick, this page writes live and shown. */
+const RX={on:{},un:null,pick:ROAM};
+const rxVideo=ch=>{const id='rxv-'+ch;let v=document.getElementById(id);if(!v){v=document.createElement('video');v.id=id;v.className='rxv';v.playsInline=true;v.autoplay=true;v.hidden=true;document.body.append(v)}return v};
+const rxLive=()=>ROAMS.filter(c=>RX.on[c]?.live);
+const rxShown=()=>{const l=rxLive();return l.includes(RX.pick)?RX.pick:l[0]||''};
+function rxApply(){
+  const shown=rxShown();
+  ROAMS.forEach(c=>{const v=rxVideo(c),on=c===shown,o=RX.on[c];v.hidden=!on;v.muted=!on;if(on)v.play().catch(()=>{});
+    if(o?.live&&o.low!==!on){o.low=!on;rtcSend(c,{low:!on,lsid:o.sid})}});
+  rtcSend(ROAMCTL,{live:rxLive(),shown,t:Date.now()});
 }
-async function rxAnswer(d){
-  RX.sid=d.sid;try{RX.pc?.close()}catch(e){}
-  const pc=new RTCPeerConnection(RTC_CFG);RX.pc=pc;
-  pc.ontrack=e=>{if(pc!==RX.pc)return;
+function rxDrop(ch){const o=RX.on[ch];if(!o)return;try{o.pc?.close()}catch(e){}o.pc=null;o.live=false;rxApply()}
+function vRx(){
+  if(!RX.un){
+    const uns=ROAMS.map(ch=>rtcWatch(ch,d=>{const o=RX.on[ch]||(RX.on[ch]={});
+      if(d&&d.bye&&d.bye===o.sid)return rxDrop(ch);
+      if(d&&d.offer&&d.sid&&d.sid!==o.sid&&Date.now()-(d.t||0)<120000)rxAnswer(ch,d).catch(()=>{});
+    }));
+    uns.push(rtcWatch(ROAMCTL,d=>{if(d&&isRoam(d.pick)&&d.pick!==RX.pick){RX.pick=d.pick;rxApply()}}));
+    // the desk reads this to know the page is alive and which phones are linked
+    setInterval(()=>rtcSend(ROAMCTL,{live:rxLive(),shown:rxShown(),t:Date.now()}),30000);
+    RX.un=uns;
+  }
+  ROAMS.forEach(rxVideo);return'';
+}
+async function rxAnswer(ch,d){
+  const o=RX.on[ch];o.sid=d.sid;try{o.pc?.close()}catch(e){}
+  const pc=new RTCPeerConnection(RTC_CFG);o.pc=pc;o.live=false;o.low=undefined;
+  pc.ontrack=e=>{if(pc!==o.pc)return;
     // a short buffer: the walking camera has no clock to line up with, so it can be close to live
     try{e.receiver.jitterBufferTarget=120}catch(x){}
-    const v=rxVideo();v.srcObject=e.streams[0]||new MediaStream([e.track]);v.hidden=false;v.play().catch(()=>{})};
-  pc.onconnectionstatechange=()=>{if(pc!==RX.pc)return;if(pc.connectionState==='failed'||pc.connectionState==='closed')rxVideo().hidden=true};
+    rxVideo(ch).srcObject=e.streams[0]||new MediaStream([e.track])};
+  // a phone counts as linked only once its picture can really flow
+  pc.onconnectionstatechange=()=>{if(pc!==o.pc)return;const cs=pc.connectionState,live=cs==='connected'?true:cs==='failed'||cs==='closed'?false:o.live;if(live!==o.live){o.live=live;rxApply()}};
   await pc.setRemoteDescription({type:'offer',sdp:d.offer});
   await pc.setLocalDescription(await pc.createAnswer());await iceDone(pc);
-  rtcSend(LOCK,{answer:pc.localDescription.sdp,asid:d.sid});
+  rtcSend(ch,{answer:pc.localDescription.sdp,asid:d.sid});
 }
 // phone side
 // size choices for the phone, with the most the encoder may send for each (times 1.5 at 60 fps); a home or venue router carries this easily
@@ -954,14 +974,14 @@ const camCap=()=>CAM_RES[CAMP.res][2]*(CAMP.fps>30?1.5:1);
 const CAM_SHAPE={land:'แนวนอน',port:'แนวตั้ง',auto:'ตามการหมุนเครื่อง'};
 const CAMP={mic:null,full:false,shape:CAM_SHAPE[keep('ptarena:camshape')]?keep('ptarena:camshape'):'land',locked:false,mode:keep('ptarena:cammode')==='sharp'?'sharp':'smooth',net:'',res:CAM_RES[keep('ptarena:camres')]?+keep('ptarena:camres'):1080,stream:null,pc:null,sid:'',state:'idle',fps:60,facing:'environment',dev:'',devs:[],zoom:null,real:'',tries:[],wake:null,un:null,err:''};
 function vCam(){
-  const st={idle:['','ยังไม่ได้ส่งภาพ'],wait:['warn',camWait()],on:['ok','● ส่งภาพอยู่'],lost:['bad','หลุด กำลังต่อใหม่…']}[CAMP.state];
+  const st={idle:['','ยังไม่ได้ส่งภาพ'],wait:['warn',camWait()],on:['ok',camOnTxt()],lost:['bad','หลุด กำลังต่อใหม่…']}[CAMP.state];
   return`<div class="campg">
-    <div class="row between"><b>${LOCK===ROAM?'กล้องเดิน · ห้องส่ง':'กล้อง · สนาม '+esc(LOCK)}</b><span class="pill ${st[0]}" id="camst">${st[1]}</span></div>
+    <div class="row between"><b>${isRoam(LOCK)?'กล้องเดิน '+roamNo(LOCK)+' · ห้องส่ง':'กล้อง · สนาม '+esc(LOCK)}</b><span class="pill ${st[0]}" id="camst">${st[1]}</span></div>
     ${CAMP.shape!=='auto'&&camPortrait()!==(CAMP.shape==='port')?`<div class="callout warn camrot"><b>หมุนมือถือเป็น${CAM_SHAPE[CAMP.shape]}</b><div class="small">ตั้งทิศภาพไว้เป็น${CAM_SHAPE[CAMP.shape]} ${camDims(CAMP.res).join(' × ')} ถือให้ตรงทิศ แล้วเปิดล็อกหมุนจอ</div></div>`:''}
     <div class="campv"><video id="campv" playsinline muted autoplay></video>${CAMP.stream?'':'<span>กด เริ่มส่งภาพ</span>'}
-      ${CAMP.full?`<div class="camfbar"><span class="pill ${{idle:'',wait:'warn',on:'ok',lost:'bad'}[CAMP.state]}">${{idle:'ยังไม่ได้ส่งภาพ',wait:LOCK===ROAM?'รอห้องส่ง':'รอจุดจับเวลา',on:'● ส่งภาพอยู่',lost:'หลุด กำลังต่อใหม่…'}[CAMP.state]}</span>${CAMP.locked?'<span class="pill ok">🔒</span>':''}<span class="camfnet" id="camfnet">${esc(CAMP.net)}</span><button class="btn" data-act="camfull">ย่อ</button></div>`:''}</div>
+      ${CAMP.full?`<div class="camfbar"><span class="pill ${{idle:'',wait:'warn',on:'ok',lost:'bad'}[CAMP.state]}">${{idle:'ยังไม่ได้ส่งภาพ',wait:isRoam(LOCK)?'รอห้องส่ง':'รอจุดจับเวลา',on:camOnTxt(),lost:'หลุด กำลังต่อใหม่…'}[CAMP.state]}</span>${CAMP.locked?'<span class="pill ok">🔒</span>':''}<span class="camfnet" id="camfnet">${esc(CAMP.net)}</span><button class="btn" data-act="camfull">ย่อ</button></div>`:''}</div>
     <div class="small" id="camnet">${esc(CAMP.net)}</div>
-    <div class="small muted" id="camgot">${CAMP.real?'ภาพที่ได้ '+esc(CAMP.real):(LOCK===ROAM?'ภาพจะขึ้นที่ห้องส่ง ไม่ต้องโหลดแอป':'ภาพจะขึ้นที่จุดจับเวลาของสนามนี้ ไม่ต้องโหลดแอป')}</div>
+    <div class="small muted" id="camgot">${CAMP.real?'ภาพที่ได้ '+esc(CAMP.real):(isRoam(LOCK)?'ภาพจะขึ้นที่ห้องส่ง ไม่ต้องโหลดแอป':'ภาพจะขึ้นที่จุดจับเวลาของสนามนี้ ไม่ต้องโหลดแอป')}</div>
     ${CAMP.tries.length?`<div class="small muted">ลองปรับกล้อง: ${CAMP.tries.map(esc).join(' · ')}</div>`:''}
     ${CAMP.err?`<div class="callout bad"><div><b>เปิดกล้องไม่ได้ (${esc(CAMP.err)})</b></div><ol style="margin:6px 0 0;padding-left:20px"><li>กดอนุญาตให้เว็บนี้ใช้กล้อง</li><li>iPhone: ตั้งค่า → Safari → กล้อง → อนุญาต</li><li>ปิดแอปอื่นที่ใช้กล้องอยู่ แล้วกดเริ่มใหม่</li></ol></div>`:''}
     ${CAMP.locked?`<div class="callout ok camlocked"><b>🔒 ล็อกกล้องอยู่</b><div class="small">หมุนเครื่องได้ ภาพไม่เปลี่ยน · กดค้าง 2 วิ เพื่อปลดล็อก</div></div><button class="btn big" data-act="camfull">⛶ เต็มจอ</button><button class="btn big" id="camunlock">กดค้างเพื่อปลดล็อก</button>`:`
@@ -974,8 +994,10 @@ function vCam(){
     <p class="small muted camtip" style="margin:0">ต่อ Wi‑Fi เดียวกับจุดจับเวลา · วางมือถือให้นิ่ง · เสียบชาร์จ · เปิดหน้านี้ค้างไว้</p></div>`;
 }
 function camAfter(){const pv=$('#campv');if(pv){const r=+(CTRL[LOCK]?.turn?.rot??CAMP.rotSeen??0),fl=(CTRL[LOCK]?.turn?.flip??CAMP.flipSeen)==='on';pv.style.transform=`rotate(${r}deg)${fl?' scaleX(-1)':''}`}const v=$('#campv');if(v&&CAMP.stream&&v.srcObject!==CAMP.stream){v.srcObject=CAMP.stream;v.play().catch(()=>{})}}
-const camWait=()=>LOCK===ROAM?'รอห้องส่ง':'รอจุดจับเวลาสนาม '+LOCK;
-function camStatus(){const el=$('#camst');if(!el||CAMP.full)return render();const st={idle:['','ยังไม่ได้ส่งภาพ'],wait:['warn',camWait()],on:['ok','● ส่งภาพอยู่'],lost:['bad','หลุด กำลังต่อใหม่…']}[CAMP.state];el.className='pill '+st[0];el.textContent=st[1]}
+const camWait=()=>isRoam(LOCK)?'รอห้องส่ง':'รอจุดจับเวลาสนาม '+LOCK;
+// a walking phone the desk has not picked keeps sending, but small, and says so
+const camOnTxt=()=>isRoam(LOCK)&&CAMP.low?'ส่งภาพอยู่ · สำรอง':'● ส่งภาพอยู่';
+function camStatus(){const el=$('#camst');if(!el||CAMP.full)return render();const st={idle:['','ยังไม่ได้ส่งภาพ'],wait:['warn',camWait()],on:['ok',camOnTxt()],lost:['bad','หลุด กำลังต่อใหม่…']}[CAMP.state];el.className='pill '+st[0];el.textContent=st[1]}
 // lens names as phones report them, in plain words; unknown names are shown as they are
 function lensName(label,n){
   const l=(label||'').toLowerCase();
@@ -1017,7 +1039,7 @@ async function camOpen(){
 }
 // asks the phone's encoder for the bitrate that suits the chosen size and smoothness; weak Wi-Fi may still lower it
 async function camBitrate(snd){
-  try{const p=snd.getParameters();if(!p.encodings||!p.encodings.length)p.encodings=[{}];p.encodings[0].maxBitrate=Math.round(camCap());p.encodings[0].maxFramerate=CAMP.fps;p.degradationPreference=CAMP.mode==='sharp'?'maintain-resolution':'maintain-framerate';await snd.setParameters(p)}catch(e){}
+  try{const p=snd.getParameters();if(!p.encodings||!p.encodings.length)p.encodings=[{}];p.encodings[0].maxBitrate=Math.round(CAMP.low?Math.min(1500000,camCap()):camCap());p.encodings[0].maxFramerate=CAMP.fps;p.degradationPreference=CAMP.mode==='sharp'?'maintain-resolution':'maintain-framerate';await snd.setParameters(p)}catch(e){}
 }
 // what the phone is really sending, and what the browser says is holding it back
 function camNet(pc){
@@ -1100,7 +1122,8 @@ async function camStart(){
   // lens names only show once the camera is allowed, so the list is read after opening it
   try{CAMP.devs=(await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==='videoinput')}catch(e){}
   try{CAMP.wake=await navigator.wakeLock?.request('screen')}catch(e){}
-  if(!CAMP.un)CAMP.un=rtcWatch(LOCK,d=>{const pc=CAMP.pc;if(d&&d.answer&&d.asid===CAMP.sid&&pc&&!pc.currentRemoteDescription)pc.setRemoteDescription({type:'answer',sdp:d.answer}).catch(()=>{})})||null;
+  if(!CAMP.un)CAMP.un=rtcWatch(LOCK,d=>{const pc=CAMP.pc;if(d&&d.answer&&d.asid===CAMP.sid&&pc&&!pc.currentRemoteDescription)pc.setRemoteDescription({type:'answer',sdp:d.answer}).catch(()=>{});
+    if(d&&d.lsid===CAMP.sid&&pc&&!!d.low!==!!CAMP.low){CAMP.low=!!d.low;const snd=pc.getSenders().find(x=>x.track?.kind==='video');if(snd)camBitrate(snd);camStatus()}})||null;
   render();camOffer();
 }
 // another lens, side or smoothness while sending: the new picture replaces the old one on the same link, so the laptop keeps it
@@ -1122,7 +1145,7 @@ function camStop(){
 }
 async function camOffer(){
   if(!CAMP.stream)return;try{CAMP.pc?.close()}catch(e){}
-  const pc=new RTCPeerConnection(RTC_CFG),sid=Date.now().toString(36)+Math.random().toString(36).slice(2,6);CAMP.pc=pc;CAMP.sid=sid;CAMP.state='wait';camStatus();
+  const pc=new RTCPeerConnection(RTC_CFG),sid=Date.now().toString(36)+Math.random().toString(36).slice(2,6);CAMP.pc=pc;CAMP.sid=sid;CAMP.low=false;CAMP.state='wait';camStatus();
   CAMP.stream.getVideoTracks().forEach(t=>pc.addTrack(t,CAMP.stream));
   CAMP.mic?.getAudioTracks().forEach(t=>pc.addTrack(t,CAMP.stream));
   // phones have a video chip for H.264; using it keeps the phone cooler and steadier than encoding in software
@@ -1721,6 +1744,9 @@ function oaQueue(){
     return out.length===q.length?out:q;
   }catch(e){console.warn('queue blocks',e);return q}
 }
+// walking phones: what the receiver page in OBS reports (live, shown), and the desk's pick
+const OAROAM={live:[],shown:'',pick:'',t:0,k:'',un:null};
+function oaRoamWatch(){if(OAROAM.un)return;OAROAM.un=rtcWatch(ROAMCTL,d=>{if(!d)return;Object.assign(OAROAM,{live:d.live??OAROAM.live,shown:d.shown??OAROAM.shown,pick:d.pick??OAROAM.pick,t:d.t??OAROAM.t});const k=JSON.stringify([OAROAM.live,OAROAM.shown,OAROAM.pick]);if(k!==OAROAM.k){OAROAM.k=k;oaDraw()}})||null}
 const oaDraw=()=>{if(S.ui.view==='onair'&&!document.activeElement?.closest?.('.oa input,.oa select'))render()};
 // where things are on this computer: what the helper says, unless a path was typed in the settings
 const oaSrc=()=>OA.H?.src||'',oaAds=()=>OA.ads||OA.H?.ads||'',oaAdvid=()=>OA.advid||OA.H?.advid||'',oaSnd=()=>OA.snd||OA.H?.music||'';
@@ -2397,7 +2423,10 @@ function vOnair(){
           ${ip&&OA.ipSeen&&ip!==OA.ipSeen?`<div class="callout warn small">เลขเครื่องเปลี่ยนจาก ${esc(OA.ipSeen)} เป็น ${esc(ip)} ตั้งลิงก์ใน Mimo ใหม่ <button class="btn sm" data-act="oaipok">ตั้งแล้ว</button></div>`:''}
           <div class="oacamr"><span class="tagx ${H.mediamtx?'good':'bad'}">OSMO</span><div>${(H.ips||[]).map((x,i)=>`<b class="mono">rtmp://${esc(x)}:1935/live/osmo</b>${i?'':' <small class="muted">ใช้อันนี้ก่อน</small>'}`).join('<br>')||'<span class="muted">ยังไม่ได้ต่อเน็ต</span>'}
             ${H.mediamtx===false?'<br><small class="muted">ตัวรับภาพ MediaMTX ยังไม่เปิด (open_Studio.cmd เปิดให้)</small>':''}</div></div>
-          <div class="oacamr"><span class="tagx">PHONE</span><div><b class="mono">${esc(oaSite()+'#cam-'+ROAM)}</b><br><small class="muted">มือถือเปิดลิงก์นี้ ใส่รหัสเจ้าหน้าที่ แล้วกดเริ่มส่งภาพ · ครั้งแรกใน OBS คลิกขวา "PT มือถือ" → Interact ใส่รหัส 1 ครั้ง</small></div></div>
+          ${(()=>{oaRoamWatch();const up=Date.now()-OAROAM.t<75000,live=up?OAROAM.live:[],sel=up&&OAROAM.shown?OAROAM.shown:(OAROAM.pick||ROAM);
+            return`<div class="oacamr"><span class="tagx ${live.length?'good':''}">PHONE</span><div>
+              <div class="oaphs">${ROAMS.map((c,i)=>`<span class="oaphc"><button class="btn oaph ${live.includes(c)?'oaphon':''}" data-act="oaphone" data-v="${c}" aria-pressed="${sel===c}" title="${live.includes(c)?'ต่ออยู่ · กดเพื่อขึ้นจอ':'ยังไม่ได้ต่อ'}">📱 ${i+1}</button><button class="btn sm" data-act="copylink" data-u="${esc(oaSite()+'#cam-'+c)}">ก๊อปลิงก์</button></span>`).join('')}</div>
+              <small class="muted">มือถือเครื่องละลิงก์ · ขอบเขียว = ต่ออยู่ · กดเลขเพื่อเลือกเครื่องขึ้นจอ · ลิงก์เครื่อง 1: <b class="mono">${esc(oaSite()+'#cam-'+ROAM)}</b></small></div></div>`})()}
         </div>
         ${oaFieldPanel(H,on)}
         ${setup}
@@ -2567,6 +2596,7 @@ document.addEventListener('click',e=>{
     case'ctrlopen':ui.crField=b.dataset.f;break;
     case'ctrlclose':ui.crField=null;break;
     case'crgo':{const f=b.dataset.f;ui.crHi=f;render();document.getElementById('crtile-'+f)?.scrollIntoView({block:'center',behavior:'smooth'});setTimeout(()=>{if(ui.crHi===f){ui.crHi=null;render()}},2500);return}
+    case'oaphone':OAROAM.pick=b.dataset.v;rtcSend(ROAMCTL,{pick:b.dataset.v});if(!OAROAM.live.includes(b.dataset.v))toast('เครื่องนี้ยังไม่ได้ต่อ จะขึ้นจอเองเมื่อต่อแล้ว');render();return;
     case'oaipok':OA.ipSeen=(OA.H?.ips||[])[0]||'';oaKeep();render();return;
     // the boxes save when they lose focus; a click on connect right after pasting must still use what is typed
     case'oaconnect':{const w=$('#oaws'),k=$('#oapw');if(w)OA.ws=w.value.trim();if(k)OA.pw=k.value.trim();OA.obsWant=true;oaKeep();OBS.connect();break}

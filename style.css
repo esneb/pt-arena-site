@@ -880,8 +880,14 @@ body.oadesk .tab[aria-selected=true]{background:#3268f5;box-shadow:none}
 html:has(body.rxonly),body.rxonly{background:transparent!important}
 body.rxonly:before{display:none}
 body.rxonly .app,body.rxonly #toast,body.rxonly #net{display:none!important}
-#rxv{position:fixed;inset:0;width:100vw;height:100vh;object-fit:contain;background:#000}
-#rxv[hidden]{display:none}
+.rxv{position:fixed;inset:0;width:100vw;height:100vh;object-fit:contain;background:#000}
+.rxv[hidden]{display:none}
+.oaphs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:6px}
+.oaphc{display:grid;grid-template-columns:minmax(0,1fr);gap:4px}
+.oa .oaph{min-height:44px;font-size:16px;white-space:nowrap}
+.oa .oaph.oaphon{border-color:#3fb950;color:#b8f5c4}
+.oa .oaph[aria-pressed=true]{background:#e5484d;border-color:#e5484d;color:#fff}
+.oa .oaph.oaphon[aria-pressed=true]{box-shadow:0 0 0 2px #3fb950}
 .oakeys{margin-left:auto;font-size:12px;letter-spacing:.5px;font-weight:600;color:var(--ra-muted)}
 .oacamr{display:flex;align-items:flex-start;gap:12px;padding:8px 0;border-top:1px solid var(--ra-line)}
 .oacamr:first-of-type{border-top:0}
