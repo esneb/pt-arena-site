@@ -863,6 +863,25 @@ body.oadesk .tab[aria-selected=true]{background:#3268f5;box-shadow:none}
 .oabrkt{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
 .oabrkt span{font-size:13px;color:var(--ra-muted)}
 .oabrkt b{font-size:44px;color:#91c3ff}
+/* record as batches: red while OBS records, one line per file */
+.oa .oabatch.on{border-color:#e5484d;box-shadow:0 0 0 1px #e5484d55}
+.oabatcht{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.oabatcht span{font-size:13px;color:var(--ra-muted)}
+.oabatcht b{font-size:36px;color:#ff9ea1}
+.oabatcht .oabp{font-size:13px;color:#ff9ea1}
+.oabl{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;max-height:260px;overflow:auto}
+.oabl li{display:flex;flex-direction:column;gap:4px;min-width:0;padding:6px 8px;border:1px solid var(--ra-line);border-radius:8px}
+.oablf{display:flex;align-items:baseline;gap:8px;min-width:0}
+.oablf b{flex:1;min-width:0;overflow-wrap:anywhere;font-weight:600}
+.oablf small{flex:none;color:var(--ra-muted);max-width:45%;overflow-wrap:anywhere;text-align:right}
+.oablp{display:flex;flex-wrap:wrap;gap:4px;padding-left:26px}
+.oablp span{font-size:12px;color:var(--ra-muted);padding:1px 8px;border:1px solid var(--ra-line);border-radius:999px}
+.oablp span.now{color:#fff;border-color:#e5484d;background:rgba(229,72,77,.25)}
+.oabl li.now{border-color:#e5484d;background:rgba(229,72,77,.12)}
+.oabl li.done{opacity:.55}
+.oabl li.done .oablf b:before{content:'✓ '}
+.oachap textarea{width:100%;min-width:0;font-family:var(--f-mono,monospace);font-size:13px;resize:vertical;background:#091320;color:inherit;border:1px solid #35598a;border-radius:6px;padding:6px 8px}
+.oa .oaqh{font-size:12px;font-weight:600;letter-spacing:.3px;color:#91c3ff;padding:8px 2px 2px;border-bottom:1px solid var(--ra-line)}
 /* live: one big button per platform, in its own colour */
 .lgo{display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:10px}
 @media (max-width:700px){.lgo{grid-template-columns:minmax(0,1fr)}}

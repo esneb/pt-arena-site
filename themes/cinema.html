@@ -21,6 +21,7 @@
   --paper-dim:rgba(243,235,221,.62);
   --paper-faint:rgba(243,235,221,.34);
   --rule:rgba(243,235,221,.38);
+  --rule-soft:rgba(243,235,221,.16);
   --gold:#d4ad66;
   --live:#d9453b;
   --th:Prompt,"Leelawadee UI",sans-serif;
@@ -148,6 +149,40 @@ body{position:relative;font-family:var(--th);color:var(--paper)}
 #break .foot{position:absolute;left:var(--m);right:80px;top:942px;display:flex;justify-content:space-between;gap:40px}
 #break .foot .label{overflow:hidden;text-overflow:ellipsis}
 
+/* ===== OPEN (recorded file, first card) ===== */
+#open .mark{position:absolute;left:50%;top:132px;height:360px;transform:translateX(-50%)}
+#open .rule.c{left:880px;width:160px;top:540px}
+#open .t{position:absolute;left:var(--m);right:var(--m);top:580px;text-align:center;font-size:88px}
+#open .v{position:absolute;left:var(--m);right:var(--m);top:956px;overflow:hidden;text-overflow:ellipsis}
+
+/* ===== CLOSE (recorded file, last card) ===== */
+#close .head{position:absolute;right:var(--m);top:74px;text-align:right;max-width:1400px}
+#close .head .label+.label{margin-top:8px}
+#close .head .label{overflow:hidden;text-overflow:ellipsis}
+#close .cols{position:absolute;left:var(--m);right:var(--m);top:240px;display:flex;justify-content:flex-end}
+#close .cols .label{font-size:20px;letter-spacing:.2em;color:var(--paper-dim);display:flex;justify-content:flex-end;align-items:baseline}
+#close .cols .label .en{color:var(--paper-dim)}
+#close .rows{position:absolute;left:var(--m);right:var(--m);top:282px}
+#close .row{display:flex;align-items:center;gap:36px;height:78px;border-bottom:1px solid var(--rule-soft)}
+#close .row .num.rk{width:84px;flex:none;font-size:52px;color:var(--paper-dim)}
+#close .row.top .num.rk{color:var(--gold)}
+#close .row .nm{flex:1 1 auto;min-width:0;display:flex;align-items:baseline;gap:28px}
+#close .row .nm b{font-weight:600;font-size:40px;line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:0 1 auto}
+#close .row .nm span{font-size:24px;line-height:1.5;color:var(--paper-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1 1 0}
+#close .row .num.sc{width:150px;flex:none;text-align:right;font-size:52px;color:var(--paper)}
+#close .row .num.tm{width:220px;flex:none;text-align:right;font-size:34px;font-weight:400;color:var(--paper-dim)}
+#close .cols .c-sc{width:150px;text-align:right}
+#close .cols .c-tm{width:220px;text-align:right;margin-left:36px}
+#close .champ{position:absolute;left:var(--m);top:360px;width:1680px}
+#close .champ .tag{display:flex;align-items:center;gap:22px;color:var(--gold)}
+#close .champ .tag i{display:block;width:72px;height:1px;background:var(--gold)}
+#close .champ .tag span{font-weight:500;font-size:var(--t-label);letter-spacing:.2em}
+#close .champ .name{font-size:var(--t-display);margin-top:20px;letter-spacing:-.005em}
+#close .champ .who{font-size:34px;font-weight:400;color:var(--paper-dim);margin-top:10px;overflow-wrap:anywhere}
+#close .only{position:absolute;left:var(--m);right:var(--m);top:470px;text-align:center;font-size:96px}
+#close .foot{position:absolute;left:var(--m);right:var(--m);top:956px}
+#close .foot .label{display:block;overflow:hidden;text-overflow:ellipsis}
+
 /* ===== CAM ===== */
 #cam .bug{position:absolute;left:64px;top:56px;display:flex;align-items:center;gap:22px;padding:18px 34px 18px 24px;background:rgba(8,11,18,.94);border:1px solid var(--rule)}
 #cam .bug img{height:80px;display:block;filter:drop-shadow(0 1px 8px rgba(0,0,0,.5))}
@@ -236,6 +271,35 @@ body{text-wrap:balance}
   <div class="spons label f" style="--d:.5" data-sponsor>ผู้สนับสนุน<span class="en">SPONSOR</span></div>
   <i class="br tl f" style="--d:.5"></i><i class="br tr f" style="--d:.5"></i><i class="br bl f" style="--d:.5"></i><i class="br brr f" style="--d:.5"></i>
   <div class="foot f" style="--d:.9"><span class="label" id="b-sub"></span><span class="label" id="b-credit"></span></div>
+</section>
+
+<!-- OPEN: first card of a recorded file -->
+<section class="card bars" id="open">
+  <div class="bgl"><div class="pic"></div><div class="vig"></div><div class="tb"></div><div class="grain"></div></div>
+  <img class="mark f" style="--d:.2" src="../event-logo.webp" alt="">
+  <div class="rule c" style="--d:.5"></div>
+  <div class="t name a" style="--d:.6" id="o-t"></div>
+  <div class="v label f" style="--d:.9" id="o-sub"></div>
+</section>
+
+<!-- CLOSE: last card of a recorded file -->
+<section class="card bars" id="close">
+  <div class="bgl"><div class="pic"></div><div class="vig"></div><div class="tb"></div><div class="grain"></div></div>
+  <img class="logo f" style="--d:.1" src="../event-logo.webp" alt="">
+  <div class="head f" style="--d:.2" id="z-head">
+    <div class="label" id="z-h"></div>
+    <div class="label" id="z-prog"></div>
+  </div>
+  <div class="rule" style="--d:.3;left:120px;width:1680px;top:222px" id="z-rule"></div>
+  <div class="cols f" style="--d:.4" id="z-cols"><span class="label c-sc">คะแนน<span class="en">SCORE</span></span><span class="label c-tm">เวลา<span class="en">TIME</span></span></div>
+  <div class="rows" id="z-rows"></div>
+  <div class="champ" id="z-champ">
+    <div class="tag a" style="--d:.4"><i></i><span>แชมป์ · CHAMPION</span></div>
+    <div class="name a" style="--d:.5" id="z-name"></div>
+    <div class="who a" style="--d:.6" id="z-cprog"></div>
+  </div>
+  <div class="only name a" style="--d:.4" id="z-only"></div>
+  <div class="foot f" style="--d:1"><span class="label" id="z-sub"></span></div>
 </section>
 
 <!-- CAM -->
@@ -365,13 +429,13 @@ function renderResult(m){
 function renderNext(m){
   const k=m.k;
   let teams=[];
-  if(k==='title')teams=[{name:m.title,school:m.sub}];
+  if(k==='title'||k==='part')teams=[{name:m.title,school:m.sub}];
   else if(Array.isArray(m.teams)&&m.teams.filter(Boolean).length)teams=m.teams.filter(Boolean);
   else if(S(m.team)||S(m.school))teams=[{name:m.team,school:m.school}];
   const pair=teams.length>=2;
   const big=$('x-big');
-  if(k==='title'){
-    txt(big,m.eyebrow);
+  if(k==='title'||k==='part'){
+    txt(big,k==='part'?m.prog:m.eyebrow);
     meta($('x-meta'),{},S(m.tag)||null);
     txt($('x-prog'),'');
   }else{
@@ -390,7 +454,8 @@ function renderNext(m){
     fit($('xl-who'),34,16,82);fit($('xr-who'),34,16,82);
   }else if(teams.length){
     txt($('xo-name'),teams[0].name);txt($('xo-who'),teams[0].school);
-    fit($('xo-name'),k==='title'?136:128,36,210,80);fit($('xo-who'),k==='title'?40:38,18,100);
+    const t=k==='title'||k==='part';
+    fit($('xo-name'),t?136:128,36,210,80);fit($('xo-who'),t?40:38,18,100);
   }
 }
 
@@ -401,6 +466,63 @@ function renderIdle(m){
   fit($('i-t'),64,30,160);
 }
 function renderCam(m){txt($('c-sub'),m.sub)}
+
+/* like fit(), but "one line" means less than two line boxes: Thai tone marks above the line add to scrollHeight */
+function fitT(el,max,min,maxH,oneMin){
+  if(el.hidden)return;
+  const lh=parseFloat(getComputedStyle(el).lineHeight)/parseFloat(getComputedStyle(el).fontSize)||1.2;
+  const ok=(s,h)=>{el.style.fontSize=s+'px';return el.scrollHeight<=h+1&&el.scrollWidth<=el.clientWidth+1};
+  for(let s=max;s>=oneMin;s-=2)if(ok(s,s*lh*1.6))return;
+  for(let s=max;s>=min;s-=2)if(ok(s,maxH))return;
+  el.style.fontSize=min+'px';
+}
+/* one line only: shrink to min, then the ellipsis of the CSS takes over */
+function fit1(el,max,min){
+  if(el.hidden)return;
+  for(let s=max;s>=min;s-=2){el.style.fontSize=s+'px';if(el.scrollWidth<=el.clientWidth+1)return}
+}
+
+/* ---------- OPEN / CLOSE (recorded files) ---------- */
+function renderOpen(m){
+  txt($('o-t'),m.prog);
+  const el=$('o-sub');el.textContent='';
+  [S(m.sub),S(m.date)].filter(Boolean).forEach((v,i)=>{
+    if(i){const sp=document.createElement('span');sp.className='sep';el.appendChild(sp)}
+    const t=document.createElement('span');t.textContent=v;el.appendChild(t);
+  });
+  el.hidden=!el.childNodes.length;
+  fitT($('o-t'),88,44,230,60);
+}
+function renderClose(m){
+  const rows=Array.isArray(m.rows)?m.rows.filter(r=>r&&S(r.team)):[];
+  const champ=!rows.length&&S(m.champion);
+  const head=$('z-h');
+  if(rows.length)bil(head,'อันดับ','STANDINGS');else head.textContent='';
+  head.hidden=!rows.length;
+  txt($('z-prog'),rows.length?m.prog:'');
+  $('z-head').hidden=!rows.length;
+  $('z-rule').hidden=!rows.length;
+  $('z-cols').hidden=!rows.length;
+  const box=$('z-rows');box.textContent='';box.hidden=!rows.length;
+  rows.slice(0,8).forEach((r,i)=>{
+    const d=document.createElement('div');d.className='row a'+(Number(r.rank)===1?' top':'');d.style.setProperty('--d',(.45+i*.07).toFixed(2));
+    const rk=document.createElement('div');rk.className='num rk';rk.textContent=hasNum(r.rank)?S(r.rank):'';
+    const nm=document.createElement('div');nm.className='nm';
+    const b=document.createElement('b');b.textContent=S(r.team);nm.appendChild(b);
+    if(S(r.school)){const s=document.createElement('span');s.textContent=S(r.school);nm.appendChild(s)}
+    const sc=document.createElement('div');sc.className='num sc';sc.textContent=hasNum(r.best)?S(r.best):'–';
+    const tm=document.createElement('div');tm.className='num tm';tm.textContent=S(r.time)||'–';
+    d.append(rk,nm,sc,tm);box.appendChild(d);
+    fit1(b,40,26);
+  });
+  $('z-champ').hidden=!champ;
+  txt($('z-cprog'),champ?m.prog:'');
+  if(champ){txt($('z-name'),m.champion);fitT($('z-name'),168,48,420,100);fit($('z-cprog'),34,20,90)}
+  const only=!rows.length&&!champ;
+  txt($('z-only'),only?m.prog:'');
+  if(only)fitT($('z-only'),96,44,250,64);
+  txt($('z-sub'),m.sub);
+}
 
 /* ---------- BREAK ---------- */
 let endsAt=0;
@@ -433,8 +555,8 @@ function renderBreak(m){
 setInterval(tick,250);
 
 /* ---------- card switching ---------- */
-const CARD={result:'result',next:'next',intro:'next',title:'next',idle:'idle',break:'break',cam:'cam'};
-const RENDER={result:renderResult,next:renderNext,intro:renderNext,title:renderNext,idle:renderIdle,break:renderBreak,cam:renderCam};
+const CARD={result:'result',next:'next',intro:'next',title:'next',part:'next',idle:'idle',break:'break',cam:'cam',open:'open',close:'close'};
+const RENDER={result:renderResult,next:renderNext,intro:renderNext,title:renderNext,part:renderNext,idle:renderIdle,break:renderBreak,cam:renderCam,open:renderOpen,close:renderClose};
 let curK=null,ready=false,pending=null;
 const timers={};
 function leave(c){
@@ -470,7 +592,9 @@ window.show=function(m){
   }catch(e){try{console.error(e)}catch(_){}}
 };
 window.THEME='cinema';
-(document.fonts?document.fonts.ready:Promise.resolve()).then(()=>{
+/* every face is asked for up front: a card measured with a fallback font would keep the wrong size */
+const faces=['400 34px Prompt','500 24px Prompt','600 88px Prompt','300 52px Oxanium','400 34px Oxanium'];
+(document.fonts?Promise.all(faces.map(f=>document.fonts.load(f,'กA0'))).catch(()=>{}).then(()=>document.fonts.ready):Promise.resolve()).then(()=>{
   ready=true;window.THEME_READY=true;
   if(pending){const p=pending;pending=null;window.show(p)}
 });
