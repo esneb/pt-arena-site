@@ -1940,7 +1940,8 @@ function oaBracket(){
     const gOpen=g=>gm(g).every(m=>!m.winnerTeamId||aired.has(m.id));
     const slot=s=>{if(s.fromGroup){const g=G.find(x=>x.id===s.fromGroup),hit=g&&g.complete?(g.standings||[]).filter(x=>x.rank===s.rank):[];
         const id=g&&gOpen(g)?(s.teamId||(hit.length===1?hit[0].teamId:null)):null;return id?{id}:{id:null,from:`ที่ ${s.rank} สาย ${s.fromGroup}`}}
-      if(s.teamId)return{id:s.teamId};if(s.bye)return{id:null,bye:true};const src=all[s.fromMatchId],w=shown(src);
+      // RoboArena fills in teamId once the earlier match is decided: it shows only after that match has been on air
+      if(s.teamId&&!s.fromMatchId)return{id:s.teamId};if(s.bye)return{id:null,bye:true};const src=all[s.fromMatchId],w=shown(src);
       return w?{id:w}:{id:null,from:!src?'':groupTop.has(src.id)?`แชมป์สาย ${src.group}`:src.group?`ผู้ชนะคู่ ${src.number} สาย ${src.group}`:`ผู้ชนะ${(roundOf[src.id]||'').replace(/^รอบ(?![\s\d])/,'')} คู่ ${src.number}`}};
     const side=(s,w)=>({name:s.id?(team[s.id]?.team||s.id):'',from:s.bye?'BYE':(s.from||''),win:w&&s.id?w===s.id:null});
     const match=m=>{const sl=(m.slots||[]).map(slot),bye=sl.find(x=>x.bye),walk=bye&&sl.find(x=>x.id);
@@ -2219,7 +2220,7 @@ function oaAdvance(m){
       const src=other.fromMatchId&&all[other.fromMatchId],ow=src&&src.winnerTeamId&&aired.has(src.id)?src.winnerTeamId:null;
       const top=new Set((br.groups||[]).flatMap(g=>{const rs=g.rounds||[];return(rs[rs.length-1]?.matches||[]).map(x=>x.id)}));
       // the other side comes from a group table: its name is not given here, its place in the group is
-      const vs=other.fromGroup?`ที่ ${other.rank} สาย ${other.fromGroup}`:other.teamId?team(other.teamId):ow?team(ow):src?(top.has(src.id)?`แชมป์สาย ${src.group}`:src.group?`ผู้ชนะคู่ ${src.number} สาย ${src.group}`:`ผู้ชนะ${(roundOf[src.id]||'').replace(/^รอบ(?![\s\d])/,'')} คู่ ${src.number}`):'';
+      const vs=other.fromGroup?`ที่ ${other.rank} สาย ${other.fromGroup}`:other.teamId&&!other.fromMatchId?team(other.teamId):ow?team(ow):src?(top.has(src.id)?`แชมป์สาย ${src.group}`:src.group?`ผู้ชนะคู่ ${src.number} สาย ${src.group}`:`ผู้ชนะ${(roundOf[src.id]||'').replace(/^รอบ(?![\s\d])/,'')} คู่ ${src.number}`):'';
       return{eyebrow:'เข้ารอบ',tag:'ADVANCES',title:w.name,sub:['→ '+(roundOf[nx.id]||'รอบต่อไป'),vs?'พบ '+vs:''].filter(Boolean).join(' · ')};
     }
   }catch(e){console.warn('advance',e)}
@@ -2369,15 +2370,28 @@ function oaBatchPart(n,go){
   oaBatchMark(n);
   oaBatchCard('part',{prog:n.prog||'',title:oaPartShort(n),sub:p.ids.length>1?`${p.ids.length} แมตช์`:''},go);oaSound(OA_SND.sting);
 }
-// the closing standings. Solo: every confirmed current run of the programme, aired or not, ranked as oaRank does.
-// Pair: the champion only, as the bracket gives it once the deciding game has been on air; nothing else is worked out
+// the closing standings. Solo: RoboArena's official ranking of the programme, top 8 in their order; without it, every
+// confirmed current run of the programme, aired or not, ranked as oaRank does.
+// Pair: once the deciding game has been on air, RoboArena's places 1, 2 and 3 as their board names them; nothing is worked out
 async function oaBatchCloseMsg(g){
-  const ms=oaBatchClips(g),prog=oaBatchProg(g),out={prog,sub:(VENUES.find(v=>v[0]===S.venue)||[])[1]||'',h2h:ms.some(m=>m.h2h),rows:[],champion:''};
+  const ms=oaBatchClips(g),prog=oaBatchProg(g),out={prog,sub:(VENUES.find(v=>v[0]===S.venue)||[])[1]||'',h2h:ms.some(m=>m.h2h),rows:[],places:[],champion:''};
   if(!prog)return out;
-  if(!out.h2h){out.rows=oaRankRows(OA.list.filter(m=>m.prog===prog&&!m.h2h&&m.ok&&!m.replaced&&!m.noResult&&!m.bare&&m.total!==''));return out}
   await Promise.race([oaBoardFetch(),oaSleep(4000)]);
-  try{const comp=String((ms.find(m=>m.comp)||{}).comp||'').toLowerCase(),t=oaBracket().find(x=>x.final&&(x.title===prog||(comp&&String(x.comp).toLowerCase()===comp)));
-    out.champion=t?.final.champion||''}catch(e){console.warn('close card',e)}
+  const b=OA.board||{},comp=String((ms.find(m=>m.comp)||{}).comp||'').toLowerCase(),num=v=>typeof v==='number'&&isFinite(v);
+  if(!out.h2h){
+    const off=(Array.isArray(b.rankings)?b.rankings:[]).filter(r=>r&&comp&&String(r.competition).toLowerCase()===comp&&num(r.rank)).sort((x,y)=>x.rank-y.rank).slice(0,8);
+    out.rows=off.length?off.map(r=>({rank:r.rank,team:r.team||r.teamId,school:r.school||'',r1:r.rounds?.[1]?.total??'',r2:r.rounds?.[2]?.total??'',best:r.total??'',time:num(r.ms)?fmtMs(r.ms):''}))
+      :oaRankRows(OA.list.filter(m=>m.prog===prog&&!m.h2h&&m.ok&&!m.replaced&&!m.noResult&&!m.bare&&m.total!==''));
+    return out}
+  try{const t=oaBracket().find(x=>x.final&&(x.title===prog||(comp&&String(x.comp).toLowerCase()===comp)));
+    out.champion=t?.final.champion||'';
+    const br=t&&out.champion&&(b.brackets||{})[t.comp],top=br&&br.championTeamId;
+    if(top){const team=id=>(br.teams||[]).find(x=>x.teamId===id)||{};
+      const fin=br.finals||[],ids=[...Object.keys(br.finalSeries?.wins||{}),...((fin[fin.length-1]?.matches||[])[0]?.slots||[]).map(s=>s.teamId)];
+      const other=[...new Set(ids.filter(id=>id&&id!==top))];
+      out.places=[[1,top,'ชนะเลิศ'],[2,other.length===1?other[0]:'','รองชนะเลิศ'],[3,br.thirdTeamId,'อันดับ 3']].filter(p=>p[1])
+        .map(([rank,id,label])=>({rank,team:team(id).team||id,school:team(id).school||'',label}))}
+  }catch(e){console.warn('close card',e)}
   return out;
 }
 const OA_FMT={parameterCategory:'Output',parameterName:'FilenameFormatting'},OA_FMT_KEY='ptarena:oafmt';

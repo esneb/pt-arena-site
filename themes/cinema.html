@@ -171,6 +171,12 @@ body{position:relative;font-family:var(--th);color:var(--paper)}
 #close .row .nm span{font-size:24px;line-height:1.5;color:var(--paper-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1 1 0}
 #close .row .num.sc{width:150px;flex:none;text-align:right;font-size:52px;color:var(--paper)}
 #close .row .num.tm{width:220px;flex:none;text-align:right;font-size:34px;font-weight:400;color:var(--paper-dim)}
+#close .rows.pl .row{height:132px}
+#close .rows.pl .row .num.rk{font-size:72px}
+#close .rows.pl .row .nm b{font-size:56px}
+#close .rows.pl .row .nm span{font-size:28px}
+#close .row .plc{flex:none;font-weight:500;font-size:var(--t-label);letter-spacing:.2em;color:var(--paper-dim)}
+#close .row.top .plc{color:var(--gold)}
 #close .cols .c-sc{width:150px;text-align:right}
 #close .cols .c-tm{width:220px;text-align:right;margin-left:36px}
 #close .champ{position:absolute;left:var(--m);top:360px;width:1680px}
@@ -495,30 +501,39 @@ function renderOpen(m){
 }
 function renderClose(m){
   const rows=Array.isArray(m.rows)?m.rows.filter(r=>r&&S(r.team)):[];
-  const champ=!rows.length&&S(m.champion);
+  // a pair programme: its places 1-2-3, in the standings rows without the score and time columns
+  const places=!rows.length&&Array.isArray(m.places)?m.places.filter(r=>r&&S(r.team)):[];
+  const list=rows.length?rows:places;
+  const champ=!list.length&&S(m.champion);
   const head=$('z-h');
-  if(rows.length)bil(head,'อันดับ','STANDINGS');else head.textContent='';
-  head.hidden=!rows.length;
-  txt($('z-prog'),rows.length?m.prog:'');
-  $('z-head').hidden=!rows.length;
-  $('z-rule').hidden=!rows.length;
+  if(list.length)bil(head,'อันดับ','STANDINGS');else head.textContent='';
+  head.hidden=!list.length;
+  txt($('z-prog'),list.length?m.prog:'');
+  $('z-head').hidden=!list.length;
+  $('z-rule').hidden=!list.length;
   $('z-cols').hidden=!rows.length;
-  const box=$('z-rows');box.textContent='';box.hidden=!rows.length;
-  rows.slice(0,8).forEach((r,i)=>{
+  const box=$('z-rows');box.textContent='';box.hidden=!list.length;box.classList.toggle('pl',!rows.length);
+  list.slice(0,8).forEach((r,i)=>{
     const d=document.createElement('div');d.className='row a'+(Number(r.rank)===1?' top':'');d.style.setProperty('--d',(.45+i*.07).toFixed(2));
     const rk=document.createElement('div');rk.className='num rk';rk.textContent=hasNum(r.rank)?S(r.rank):'';
     const nm=document.createElement('div');nm.className='nm';
     const b=document.createElement('b');b.textContent=S(r.team);nm.appendChild(b);
     if(S(r.school)){const s=document.createElement('span');s.textContent=S(r.school);nm.appendChild(s)}
-    const sc=document.createElement('div');sc.className='num sc';sc.textContent=hasNum(r.best)?S(r.best):'–';
-    const tm=document.createElement('div');tm.className='num tm';tm.textContent=S(r.time)||'–';
-    d.append(rk,nm,sc,tm);box.appendChild(d);
-    fit1(b,40,26);
+    if(rows.length){
+      const sc=document.createElement('div');sc.className='num sc';sc.textContent=hasNum(r.best)?S(r.best):'–';
+      const tm=document.createElement('div');tm.className='num tm';tm.textContent=S(r.time)||'–';
+      d.append(rk,nm,sc,tm);
+    }else{
+      d.append(rk,nm);
+      if(S(r.label)){const p=document.createElement('div');p.className='plc';p.textContent=S(r.label);d.appendChild(p)}
+    }
+    box.appendChild(d);
+    if(rows.length)fit1(b,40,26);else fit1(b,56,30);
   });
   $('z-champ').hidden=!champ;
   txt($('z-cprog'),champ?m.prog:'');
   if(champ){txt($('z-name'),m.champion);fitT($('z-name'),168,48,420,100);fit($('z-cprog'),34,20,90)}
-  const only=!rows.length&&!champ;
+  const only=!list.length&&!champ;
   txt($('z-only'),only?m.prog:'');
   if(only)fitT($('z-only'),96,44,250,64);
   txt($('z-sub'),m.sub);
