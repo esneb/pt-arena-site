@@ -5,164 +5,409 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>จับเวลา · PT Robotics</title>
 <style>
-/* Countdown for the hall projector. The event poster (timer-bg.webp, 16:9) is the page; the clock sits on the
-   open water between the two robots so the poster's own title stays readable. "ขยาย" trades the poster for size. */
+/* One countdown, two views. timer.html#screen is the hall projector: the event poster, and at match time a
+   scoreboard band that rises from the bottom of the same picture. timer.html is the operator's desk with a live
+   copy of that screen. The desk writes the state to localStorage; the screen only reads it. */
 @font-face{font-family:Prompt;src:url(font/Prompt-Medium.ttf);font-weight:500}
 @font-face{font-family:Prompt;src:url(font/Prompt-SemiBold.ttf);font-weight:600}
 @font-face{font-family:Oxanium;src:url(font/Oxanium.ttf);font-weight:200 800}
 :root{
-  --navy:#04143a; --navy-deep:#020a22; --ice:#f1f7ff; --ice-dim:#b9cdf0; --cyan:#3fd0ff; --gold:#ffc62e; --red:#ff5b4a;
-  --panel:rgba(4,20,58,.82); --line:rgba(63,208,255,.34); --focus:#ffe08a;
+  --navy-deep:#020a22; --ice:#f1f7ff; --ice-dim:#a9bde3; --cyan:#3fd0ff; --gold:#ffc62e; --gold-hover:#ffd45c;
+  --gold-active:#e9b21f; --red:#ff5b4a; --red-band:#c4231b;
+  --ui-bg:#060d22; --ui-line:#1c2a4d; --ui-line-strong:#33467a; --btn:#111c3a; --btn-hover:#1a2a54;
+  --btn-active:#0b142c; --focus:#ffe08a; --shadow:rgba(0,0,0,.4);
   --num:Oxanium,Bahnschrift,sans-serif; --th:Prompt,"Leelawadee UI",sans-serif;
-  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px;
+  --slide:460ms cubic-bezier(.16,1,.3,1); --grow:700ms cubic-bezier(.65,0,.35,1);
 }
 *{box-sizing:border-box}
-html,body{height:100%;margin:0;overflow:clip;background:var(--navy-deep);color:var(--ice);font-family:var(--th)}
-body.quiet{cursor:none}
-/* the poster again, blurred, fills a screen that is not 16:9 */
-.fill{position:fixed;inset:-4%;background:url(timer-bg.webp) center/cover;filter:blur(28px) brightness(.5)}
-.stage{position:fixed;inset:0;margin:auto;width:min(100vw,177.78vh);aspect-ratio:16/9;container-type:size;
-  background:url(timer-bg.webp) center/cover;overflow:hidden}
-.scrim{position:absolute;inset:0;background:rgba(2,10,34,.8);opacity:0;transition:opacity .3s;pointer-events:none}
-.clock{position:absolute;left:50%;top:78%;translate:-50% -50%;display:flex;flex-direction:column;align-items:center;
-  transition:top .3s}
-.digits{display:flex;align-items:center;font-family:var(--num);font-weight:700;line-height:1;white-space:nowrap;
-  font-size:calc(42cqw / var(--ems,2.82));color:var(--ice);
-  text-shadow:0 .03em 0 var(--navy),0 0 .05em var(--navy),0 .05em .22em var(--navy-deep);transition:color .3s}
+html,body{margin:0;overflow-x:clip;background:var(--navy-deep);color:var(--ice);font-family:var(--th)}
+
+/* the stage: one 16:9 picture, everything inside sized from it so it looks the same at any size */
+.stage{position:relative;aspect-ratio:16/9;container-type:size;overflow:hidden;
+  background:var(--navy-deep) url(timer-bg.webp) center/cover}
+/* Parts every look shares. The script only sets state classes on the stage (clock, big, last, over) and one
+   look-* class; each look below draws those states its own way, so a new look is one more CSS group. */
+.band{position:absolute;left:0;right:0;bottom:0}
+.event{display:none;margin:0}
+.row{position:absolute;left:0;right:0;top:0;bottom:0;display:flex;align-items:center;justify-content:center}
+.tag{font-weight:600;line-height:1.4;color:var(--ice)}
+.tag small{display:block;font-family:var(--num);line-height:1.3;letter-spacing:.2em;margin-right:-.2em;color:var(--cyan)}
+.digits{display:flex;align-items:center;font-family:var(--num);font-weight:800;line-height:1;white-space:nowrap}
+/* --ems is the width of the digits in em, set from the script (MM:SS or H:MM:SS), so each look can fit them to a width */
 .digits b{display:inline-block;width:.62em;text-align:center;font-weight:inherit}
 .digits i{display:inline-block;width:.34em;text-align:center;font-style:normal;translate:0 -.06em}
-.note{font-weight:600;font-size:3.1cqw;line-height:1;letter-spacing:.06em;color:var(--red);height:3.1cqw;margin-bottom:1cqw;
-  padding:1cqw 2.4cqw;border-radius:99cqw;background:var(--navy-deep);box-sizing:content-box;visibility:hidden}
-body.warn .digits{color:var(--gold)}
-body.last .digits,body.over .digits{color:var(--red)}
-body.over .note{visibility:visible}
-body.over .digits{animation:blink 1s steps(2,jump-none) 6}
-@keyframes blink{50%{opacity:.25}}
-body.big .scrim{opacity:1}
-body.big .clock{top:50%}
-body.big .digits{font-size:calc(86cqw / var(--ems,2.82))}
-body.big .note{font-size:5cqw;height:5cqw;margin-bottom:2cqw}
+.line{position:absolute;left:0;bottom:0;width:100%;background:var(--gold);transform-origin:left}
+.over-msg{display:none;align-items:center}
+.over-msg b{font-family:var(--num);font-weight:800;line-height:1.1;letter-spacing:.02em}
+.over-msg span{font-weight:600;line-height:1.4}
+.stage.last .digits{color:var(--red)}
+.stage.last .line{background:var(--red)}
+.stage.over .tag,.stage.over .digits{display:none}
+.stage.over .over-msg{display:flex}
+.stage.live .band{transition:transform var(--slide),height var(--grow),background-color .3s}
+.stage.live .digits,.stage.live .tag,.stage.live .tag small,.stage.live .over-msg>*{transition:color .3s,font-size var(--grow)}
+.stage.live .row,.stage.live .line{transition:opacity var(--slide),translate var(--slide)}
 
-/* controls: for the person at the notebook; they fade while nobody moves the mouse */
-.bar{position:fixed;left:0;right:0;bottom:0;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:var(--s3) var(--s5);
-  padding:var(--s3) var(--s4);background:var(--panel);border-top:1px solid var(--line);font-size:15px;line-height:1;
-  transition:opacity .25s,translate .25s}
-body.quiet .bar{opacity:0;translate:0 100%;pointer-events:none}
-.grp{display:flex;align-items:center;gap:var(--s2)}
-.grp>span{color:var(--ice-dim);font-size:13px}
-button,input{font:inherit;color:var(--ice);height:44px;border:1px solid var(--line);border-radius:8px;background:rgba(241,247,255,.07);
-  outline:2px solid transparent;outline-offset:2px}
-button{padding:0 var(--s4);cursor:pointer;font-weight:500;transition:background-color .15s,border-color .15s}
-button:hover{background:rgba(241,247,255,.16)}
-button:active{background:rgba(241,247,255,.26)}
-button:focus-visible,input:focus-visible{outline-color:var(--focus)}
-button:disabled{opacity:.55;cursor:not-allowed}
-button[aria-pressed=true]{border-color:var(--cyan);background:rgba(63,208,255,.2)}
-button.go{min-width:104px;font-weight:600;color:var(--navy-deep);background:var(--gold);border-color:var(--gold)}
-button.go:hover{background:#ffd45c}
-button.go:active{background:#e9b21f}
-input{width:64px;text-align:center;font-family:var(--num);font-size:18px;padding:0 var(--s1)}
-.keys{color:var(--ice-dim);font-size:12px}
-.keys kbd{font-family:var(--num);color:var(--ice);border:1px solid var(--line);border-radius:4px;padding:2px 6px;margin:0 2px}
-.by{color:var(--ice-dim);font-size:12px}
+/* look 1, สกอร์บอร์ด: a scoreboard band rises over the bottom of the poster */
+.look-board .band{height:30.5cqh;background:var(--navy-deep);border-top:.56cqh solid var(--gold);transform:translateY(100%)}
+.look-board.clock .band{transform:none}
+/* last minute: the solid band grows to just under the poster's "SOUTHERN REGION" line (it ends at 37.4% of the height),
+   so the title stays at full brightness; a projector washes out anything translucent */
+.look-board.big .band{height:61.5cqh}
+.look-board.over .band{background:var(--red-band)}
+.look-board .row{bottom:1.3cqh;gap:3.6cqw}
+.look-board .tag{text-align:right;font-size:2.1cqw}
+.look-board .tag small{font-size:1.35cqw}
+.look-board .digits{font-size:14cqw;color:var(--gold)}
+.look-board.big .digits{font-size:min(calc(76cqw / var(--ems,2.82)),50cqh)}
+.look-board.big .tag{font-size:2.8cqw}
+.look-board.big .tag small{font-size:1.8cqw}
+.look-board .line{height:1.3cqh}
+.look-board .over-msg{gap:2.6cqw}
+.look-board .over-msg b{font-size:11cqw}
+.look-board .over-msg span{font-size:3.6cqw}
+.look-board.big .over-msg b{font-size:14cqw}
+.look-board.big .over-msg span{font-size:4.6cqw}
+
+/* look 2, ตัวอักษรโปสเตอร์: no band; the digits stand on the water between the two robots, lettered like the
+   poster's own title (white, thick navy edge, solid navy drop). Their bottom stays put, so in the last minute they
+   grow up into the skyline and stop below the venue line (44.6% of the height) */
+.look-poster .band{top:0}
+.look-poster .row{top:auto;bottom:8.7cqh;flex-direction:column;gap:.5cqh;opacity:0;translate:0 5cqh}
+.look-poster .line{height:1.3cqh;opacity:0}
+.look-poster.clock .row,.look-poster.clock .line{opacity:1;translate:none}
+.look-poster .tag{order:-1;font-size:2.1cqw;line-height:1.5;padding:.15cqw 1.8cqw;border-radius:99px;
+  color:var(--navy-deep);background:var(--gold)}
+.look-poster .tag small{display:none}
+.look-poster .digits{font-size:min(17.2cqw,calc(54cqw / var(--ems,2.82)));color:var(--ice);
+  -webkit-text-stroke:.045em var(--navy-deep);paint-order:stroke fill;filter:drop-shadow(0 .03em 0 var(--navy-deep))}
+.look-poster.big .digits{font-size:min(calc(60cqw / var(--ems,2.82)),39cqh)}
+.stage.look-poster.over .digits{display:flex;color:var(--red)}
+.look-poster .over-msg{order:-1;gap:1cqw;padding:.15cqw 1.8cqw;border-radius:99px;color:var(--ice);background:var(--red-band)}
+.look-poster .over-msg b{font-size:2.1cqw;line-height:1.5}
+.look-poster .over-msg span{font-size:1.5cqw}
+
+/* look 3, จอเต็ม: a solid navy surface slides up over the whole poster; the clock owns the screen. It is full size
+   already, so the last minute thickens the gold edge and the line and steps the digits up instead of growing */
+.look-full .band{top:0;background:var(--navy-deep);border-top:.56cqh solid var(--gold);transform:translateY(100%)}
+.look-full.clock .band{transform:none}
+.look-full.big .band{border-top-width:1.5cqh}
+.look-full.over .band{background:var(--red-band)}
+.look-full .event{display:block;position:absolute;left:0;right:0;top:6cqh;text-align:center;font-family:var(--num);
+  font-weight:700;font-size:2.4cqw;line-height:1.3;letter-spacing:.06em;color:var(--ice)}
+.look-full .event span{color:var(--gold)}
+.look-full.over .event span{color:var(--ice)}
+.look-full .row{flex-direction:column;gap:1cqh}
+.look-full .tag{order:1;text-align:center;font-size:2.4cqw}
+.look-full .tag small{font-size:1.5cqw}
+/* the em box has room above and below the numerals; trimming it keeps the label close to the digits */
+.look-full .digits{font-size:min(calc(80cqw / var(--ems,2.82)),46cqh);margin-block:-.08em;color:var(--gold)}
+.look-full.big .digits{font-size:min(calc(88cqw / var(--ems,2.82)),54cqh)}
+.look-full .line{left:8cqw;width:84cqw;bottom:7cqh;height:1.4cqh}
+.look-full.big .line{height:2.6cqh}
+.look-full .over-msg{flex-direction:column;gap:1cqh}
+.look-full .over-msg b{font-size:16cqw}
+.look-full .over-msg span{font-size:5cqw}
+
+/* projector view */
+body.screen{height:100vh;overflow:hidden;cursor:none}
+.screen .app{display:none}
+/* the poster again, blurred, fills a window that is not 16:9 */
+.fill{position:fixed;inset:-4%;background:url(timer-bg.webp) center/cover;filter:blur(28px)}
+.screen .stage{position:fixed;inset:0;margin:auto;width:min(100vw,177.78vh);height:min(56.25vw,100vh)}
+.hint{position:fixed;top:24px;right:24px;margin:0;padding:10px 18px;font-weight:500;font-size:18px;line-height:1.5;
+  color:var(--ice);background:var(--navy-deep);border:1px solid var(--ui-line-strong);border-radius:8px;
+  opacity:0;transition:opacity .6s;pointer-events:none}
+.hint.on{opacity:1}
+.hint.sound{right:auto;left:24px}
+kbd{font-family:var(--num);font-weight:600;color:var(--ice);border:1px solid var(--ui-line-strong);
+  border-radius:4px;padding:1px 7px;margin:0 3px}
+
+/* operator's desk */
+.control .fill,.control .hint{display:none}
+body.control{background:var(--ui-bg);min-height:100vh}
+.app{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:24px 32px;align-items:start;
+  max-width:1760px;margin:0 auto;padding:20px 28px 24px}
+.cap,.panel h2{margin:0 0 10px;font-size:14px;font-weight:500;line-height:1.5;color:var(--ice-dim)}
+.preview .stage{width:100%;max-width:calc((100vh - 96px) * 16 / 9);border:1px solid var(--ui-line);border-radius:0;
+  box-shadow:0 8px 24px var(--shadow)}
+.panel{display:flex;flex-direction:column;gap:22px}
+.panel section{display:flex;flex-direction:column}
+.panel .row2{flex-direction:row;gap:10px}
+.seg{display:flex;padding:4px;gap:4px;background:var(--btn-active);border:1px solid var(--ui-line);border-radius:10px}
+.seg button{flex:1;border-color:transparent;background:transparent}
+.seg button[aria-pressed=true]{background:var(--gold);border-color:var(--gold);color:var(--navy-deep)}
+.presets{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.presets button{font-size:18px;font-weight:600;padding:0}
+.custom{display:flex;align-items:flex-start;gap:6px}
+.custom label{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:12px;line-height:1.5;color:var(--ice-dim)}
+.custom .colon{font-family:var(--num);font-size:20px;line-height:48px;color:var(--ice-dim)}
+.custom button{margin-left:auto}
+.keys{margin:0;font-size:13px;line-height:1.9;color:var(--ice-dim)}
+.ico{display:flex;align-items:center;justify-content:center;gap:8px}
+.ico svg{width:18px;height:18px;flex:none}
+#mute[aria-pressed=true]{border-color:var(--gold);color:var(--gold)}
+#mute[aria-pressed=true] .off,#mute[aria-pressed=false] .on{display:none}
+.snd button{flex:1}
+
+button,input,select{font:inherit;color:var(--ice);min-height:48px;border:1px solid var(--ui-line-strong);border-radius:8px;
+  background:var(--btn);outline:2px solid transparent;outline-offset:2px}
+button{padding:0 18px;cursor:pointer;font-weight:500;line-height:1.4;
+  transition:background-color .15s,border-color .15s,color .15s,transform .1s}
+button:hover{background:var(--btn-hover);border-color:var(--ice-dim)}
+button:active{background:var(--btn-active);transform:translateY(1px)}
+button:focus-visible,input:focus-visible,select:focus-visible{outline-color:var(--focus)}
+select{padding:0 14px;cursor:pointer;color-scheme:dark}
+select:hover{border-color:var(--ice-dim)}
+button:disabled,button:disabled:hover{opacity:.4;cursor:not-allowed;transform:none;background:var(--btn);border-color:var(--ui-line-strong)}
+.presets button[aria-pressed=true]{border-color:var(--gold);color:var(--gold)}
+.seg button[aria-pressed=true]:hover{background:var(--gold-hover)}
+button.go{flex:2;min-height:64px;font-size:22px;font-weight:600;color:var(--navy-deep);background:var(--gold);border-color:var(--gold)}
+button.go:hover{background:var(--gold-hover);border-color:var(--gold-hover)}
+button.go:active{background:var(--gold-active)}
+button.go.stop{color:var(--ice);background:var(--btn);border-color:var(--gold)}
+button.go.stop:hover{background:var(--btn-hover)}
+.run #reset{flex:1;min-height:64px}
+.open{margin-top:10px}
+input{width:62px;text-align:center;font-family:var(--num);font-size:20px;padding:0 4px}
+input:hover{border-color:var(--ice-dim)}
+
+@media (max-width:900px){.app{grid-template-columns:1fr}}
 @media (prefers-reduced-motion:reduce){
-  .scrim,.clock,.digits,.bar,button{transition:none}
-  body.over .digits{animation:none}
+  .stage.live .band,.stage.live .row,.stage.live .line,.stage.live .digits,.stage.live .tag,.stage.live .tag small,.stage.live .over-msg>*,.hint,button{transition:none}
 }
 </style>
 </head>
 <body>
+<script>document.body.className=location.hash==='#screen'?'screen':'control'</script>
 <div class="fill" aria-hidden="true"></div>
-<main class="stage">
-  <div class="scrim" aria-hidden="true"></div>
-  <div class="clock">
-    <div class="note" id="note">หมดเวลา</div>
-    <div class="digits" id="digits" role="timer" aria-label="เวลาที่เหลือ"></div>
+<main class="stage" id="stage">
+  <div class="band" id="band">
+    <p class="event">YOUTH ROBOTICS CHAMPIONSHIP · <span>SOUTHERN REGION</span></p>
+    <div class="row">
+      <div class="tag"><small>TIME LEFT</small>เวลาที่เหลือ</div>
+      <div class="digits" id="digits" role="timer" aria-label="เวลาที่เหลือ"></div>
+      <div class="over-msg" id="overMsg"><b>TIME'S UP</b><span>หมดเวลา</span></div>
+    </div>
+    <div class="line" id="line"></div>
   </div>
 </main>
-<div class="bar" id="bar">
-  <div class="grp">
-    <button class="go" id="go">เริ่ม</button>
-    <button id="reset">เริ่มใหม่</button>
+<p class="hint" id="hint">กด<kbd>F</kbd>เต็มจอ</p>
+<p class="hint sound" id="soundHint">คลิกจอ 1 ครั้งเพื่อเปิดเสียง</p>
+
+<div class="app">
+  <div class="preview">
+    <p class="cap">จอในห้อง</p>
+    <div id="slot"></div>
   </div>
-  <div class="grp" id="presets"><span>นาที</span></div>
-  <form class="grp" id="custom">
-    <span>ตั้งเอง</span>
-    <input id="mm" inputmode="numeric" maxlength="3" aria-label="นาที" placeholder="นาที">
-    <span>:</span>
-    <input id="ss" inputmode="numeric" maxlength="2" aria-label="วินาที" placeholder="วิ">
-    <button>ตั้งเวลา</button>
-  </form>
-  <div class="grp">
-    <button id="big" aria-pressed="false">ขยาย</button>
-    <button id="full">เต็มจอ</button>
-  </div>
-  <div class="keys"><kbd>Space</kbd>เริ่ม/หยุด <kbd>R</kbd>เริ่มใหม่ <kbd>B</kbd>ขยาย <kbd>F</kbd>เต็มจอ</div>
-  <div class="by">Developed by 5AM ROOM</div>
+  <aside class="panel">
+    <section>
+      <h2>หน้าจอ</h2>
+      <div class="seg" role="group" aria-label="หน้าจอแสดง">
+        <button id="vPoster">โปสเตอร์</button>
+        <button id="vClock">เวลา</button>
+      </div>
+      <button class="open ico" id="open"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>เปิดหน้าจอ</button>
+    </section>
+    <section>
+      <h2><label for="lookSel">หน้าตา</label></h2>
+      <select id="lookSel">
+        <option value="board">สกอร์บอร์ด</option>
+        <option value="poster">ตัวอักษรโปสเตอร์</option>
+        <option value="full">จอเต็ม</option>
+      </select>
+    </section>
+    <section class="row2 run">
+      <button class="go" id="go">เริ่ม</button>
+      <button id="reset">เริ่มใหม่</button>
+    </section>
+    <section>
+      <div class="presets" id="presets"></div>
+    </section>
+    <section>
+      <h2>ตั้งเอง</h2>
+      <form class="custom" id="custom">
+        <label><input id="hh" inputmode="numeric" maxlength="2">ชม.</label>
+        <span class="colon">:</span>
+        <label><input id="mm" inputmode="numeric" maxlength="2">นาที</label>
+        <span class="colon">:</span>
+        <label><input id="ss" inputmode="numeric" maxlength="2">วินาที</label>
+        <button>ตั้งเวลา</button>
+      </form>
+    </section>
+    <section class="row2 snd">
+      <button class="ico" id="mute" aria-pressed="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z"/><path class="on" d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/><path class="off" d="m16 9 6 6M22 9l-6 6"/></svg>เสียง</button>
+      <button id="test">ลองเสียง</button>
+    </section>
+    <p class="keys"><kbd>Space</kbd> เริ่ม/หยุด <kbd>R</kbd> เริ่มใหม่</p>
+  </aside>
 </div>
 <script>
-// One countdown. Time left is always worked out from the clock on the wall (endAt), never by counting ticks,
-// so a reload or a sleeping tab cannot make it drift; the state is kept on this machine.
-const KEY='pt-timer',PRESETS=[1,2,3,5,10],MAX=999*60+59;
+// Time left is always worked out from the clock on the wall (endAt), never by counting ticks,
+// so a reload or a sleeping tab cannot make it drift.
+const KEY='pt-timer',PRESETS=[[1800,'30 นาที'],[3600,'1 ชม.'],[10800,'3 ชม.']],MAX=99*3600+59*60+59,VIEWS=['poster','clock'],LOOKS=['board','poster','full'];
+const SCREEN=location.hash==='#screen';
 const $=id=>document.getElementById(id);
-let S={dur:120,left:120000,endAt:0,big:false};
-try{S={...S,...JSON.parse(localStorage.getItem(KEY)||'{}')}}catch(e){}
+const stage=$('stage'),digits=$('digits'),line=$('line'),band=$('band');
+const reduce=matchMedia('(prefers-reduced-motion: reduce)');
+
+let S;
+// the stored state may come from an older version of this page, so keep only valid fields
+function load(){
+  let raw={};try{raw=JSON.parse(localStorage.getItem(KEY))||{}}catch(e){}
+  const num=(v,d)=>Number.isFinite(v)?v:d;
+  const dur=Math.min(MAX,Math.max(1,Math.round(num(raw.dur,1800))));
+  S={dur,left:Math.min(dur*1000,Math.max(0,num(raw.left,dur*1000))),endAt:Math.max(0,num(raw.endAt,0)),
+    view:VIEWS.includes(raw.view)?raw.view:'poster',look:LOOKS.includes(raw.look)?raw.look:'board',mute:raw.mute===true,ping:Math.max(0,num(raw.ping,0))};
+}
+load();
 const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}};
 const running=()=>S.endAt>0;
 const left=()=>running()?Math.max(0,S.endAt-Date.now()):S.left;
 
+// the projector must never sleep; the desk only needs to while a match runs
 let lock=null;
-const awake=async on=>{try{if(on&&!lock&&navigator.wakeLock)lock=await navigator.wakeLock.request('screen');if(!on&&lock){await lock.release();lock=null}}catch(e){lock=null}};
+const awake=async()=>{const on=SCREEN||running();
+  try{if(on&&!lock&&navigator.wakeLock&&!document.hidden)lock=await navigator.wakeLock.request('screen');
+    if(!on&&lock){await lock.release();lock=null}}catch(e){lock=null}};
 
-function start(){if(running())return;if(S.left<=0)S.left=S.dur*1000;S.endAt=Date.now()+S.left;save();awake(true);paint()}
-function pause(){if(!running())return;S.left=left();S.endAt=0;save();awake(false);paint()}
-function reset(){S.endAt=0;S.left=S.dur*1000;save();awake(false);paint()}
-function setDur(sec){S.dur=Math.min(MAX,Math.max(1,Math.round(sec)));reset()}
-function setBig(on){S.big=on;save();paint()}
-const full=()=>document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen().catch(()=>{});
+// Sound lives only in the projector view, so two open windows never play it twice.
+let ac=null;
+function unlock(){try{ac=ac||new AudioContext();if(ac.state!=='running')ac.resume().then(paint,()=>{})}catch(e){}}
+function tone(f,type,at,len,vol,hold){
+  const t=ac.currentTime+at,o=ac.createOscillator(),g=ac.createGain();
+  o.type=type;o.frequency.value=f;
+  g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(vol,t+.012);
+  if(hold)g.gain.setValueAtTime(vol,t+hold);
+  g.gain.exponentialRampToValueAtTime(.0001,t+len);
+  o.connect(g).connect(ac.destination);o.start(t);o.stop(t+len+.05);
+}
+const SFX={
+  chime:()=>{tone(880,'sine',0,.5,.5);tone(1318.5,'sine',.24,.8,.5)},
+  // 10 minutes left: the same two notes an octave lower, slower and softer, so it never sounds like the 1-minute chime
+  remind:()=>{tone(440,'sine',0,.9,.4);tone(659.25,'sine',.4,1.2,.4)},
+  tick:()=>tone(1000,'square',0,.09,.18),
+  tickHi:()=>tone(1568,'square',0,.12,.22),
+  end:()=>[233,277,349].forEach(f=>tone(f,'sawtooth',0,1.2,.22,1.05))
+};
+function sound(kind){if(ac&&ac.state==='running')try{SFX[kind]()}catch(e){}}
 
-let shown='';
+// Each cue belongs to one moment on the wall clock (endAt minus its time left). A cue plays when that moment
+// falls between the previous paint and this one, so it plays once; a reload starts the window at load time,
+// and a moment found more than 1.2 s late (a sleeping tab) is skipped.
+let lastCheck=Date.now(),lastEnd=0,lastPing=S.ping;
+function cues(ms){
+  const now=Date.now();
+  // after the desk records the finish (endAt 0, left 0), the end moment is still the last endAt seen
+  if(running())lastEnd=S.endAt;else if(ms>0)lastEnd=0;
+  if(lastEnd&&!S.mute){
+    const due=T=>{const m=lastEnd-T;return m>lastCheck&&m<=now&&now-m<=1200};
+    if(S.dur>600&&due(600000))sound('remind');
+    if(S.dur>60&&due(60000))sound('chime');
+    for(let k=10;k>=1;k--)if(due(k*1000))sound(k<=3?'tickHi':'tick');
+    if(due(0))sound('end');
+  }
+  if(S.ping>lastPing){lastPing=S.ping;if(now-S.ping<3000)sound('end')}
+  lastCheck=now;
+}
+
+let shown='',wasOver=null,lookShown=null;
 function paint(){
   const ms=left(),sec=Math.ceil(ms/1000),over=ms<=0;
-  if(over&&running()){S.endAt=0;S.left=0;save();awake(false)}
-  const m=Math.floor(sec/60),text=String(m).padStart(2,'0')+':'+String(sec%60).padStart(2,'0');
+  if(over&&running()&&!SCREEN){S.endAt=0;S.left=0;save();awake()}
+  if(SCREEN)cues(ms);
+  // a time set to an hour or more keeps its hour digit to the end, so the digits never change size mid-count
+  const two=n=>String(n).padStart(2,'0'),hours=S.dur>=3600;
+  const text=(hours?Math.floor(sec/3600)+':'+two(Math.floor(sec/60)%60):two(Math.floor(sec/60)))+':'+two(sec%60);
   if(text!==shown){
+    const tick=shown&&running()&&sec>0&&sec<=10;
     shown=text;
-    $('digits').innerHTML=[...text].map(c=>c===':'?'<i>:</i>':'<b>'+c+'</b>').join('');
-    $('digits').style.setProperty('--ems',((text.length-1)*.62+.34).toFixed(2));
+    digits.innerHTML=[...text].map(c=>c===':'?'<i>:</i>':'<b>'+c+'</b>').join('');
+    digits.style.setProperty('--ems',hours?4.4:2.82);
+    if(tick&&!reduce.matches)digits.animate([{transform:'scale(1.08)'},{transform:'scale(1)'}],{duration:280,easing:'cubic-bezier(.2,.8,.2,1)'});
   }
-  const b=document.body.classList,warnAt=Math.min(10,S.dur/2);
-  b.toggle('over',over);b.toggle('last',!over&&sec<=Math.min(5,warnAt));b.toggle('warn',!over&&sec<=warnAt&&sec>Math.min(5,warnAt));
-  b.toggle('big',S.big);
-  $('go').textContent=running()?'หยุด':over?'เริ่มอีกรอบ':ms<S.dur*1000?'ต่อ':'เริ่ม';
-  $('big').setAttribute('aria-pressed',S.big);
-  document.querySelectorAll('#presets button').forEach(x=>x.setAttribute('aria-pressed',+x.dataset.m*60===S.dur));
+  const st=stage.classList,clock=S.view==='clock';
+  // a new look appears at once; its parts must not slide in from where the old look had them
+  if(S.look!==lookShown){if(lookShown!==null)liven();lookShown=S.look;LOOKS.forEach(l=>st.toggle('look-'+l,l===S.look))}
+  st.toggle('clock',clock);st.toggle('over',over);st.toggle('last',!over&&sec<=5&&ms<S.dur*1000);st.toggle('big',ms<=60000);
+  band.setAttribute('aria-hidden',!clock);
+  line.style.transform='scaleX('+(over?0:ms/(S.dur*1000)).toFixed(4)+')';
+  if(over&&wasOver===false&&!reduce.matches)
+    $('overMsg').animate([{transform:'scale(1.05)'},{transform:'scale(1)'}],{duration:520,easing:'cubic-bezier(.2,1.5,.4,1)'});
+  wasOver=over;
+  if(SCREEN){$('soundHint').classList.toggle('on',!S.mute&&!(ac&&ac.state==='running'));return}
+  $('mute').setAttribute('aria-pressed',!S.mute);
+  const go=$('go');
+  go.textContent=running()?'หยุด':over?'เริ่มอีกรอบ':ms<S.dur*1000?'ต่อ':'เริ่ม';
+  go.classList.toggle('stop',running());
+  $('reset').disabled=!running()&&S.left===S.dur*1000;
+  $('lookSel').value=S.look;
+  $('vPoster').setAttribute('aria-pressed',!clock);$('vClock').setAttribute('aria-pressed',clock);
+  document.querySelectorAll('#presets button').forEach(x=>x.setAttribute('aria-pressed',+x.dataset.s===S.dur));
 }
+
+// a hidden tab gets no animation frames; the interval keeps the end from being missed
 (function loop(){paint();requestAnimationFrame(loop)})();
-setInterval(paint,250); // a hidden tab gets no animation frames; this keeps the end from being missed
+setInterval(paint,250);
+// the band moves only on a change made while watching: not when the page first opens mid-match, and not when
+// the window changes size (going fullscreen would otherwise animate every size measured from the stage)
+let settle=0;
+const liven=()=>{stage.classList.remove('live');cancelAnimationFrame(settle);
+  settle=requestAnimationFrame(()=>settle=requestAnimationFrame(()=>stage.classList.add('live')))};
+liven();addEventListener('resize',liven);
 
-PRESETS.forEach(m=>{const x=document.createElement('button');x.textContent=m;x.dataset.m=m;x.setAttribute('aria-label',m+' นาที');x.onclick=()=>setDur(m*60);$('presets').append(x)});
-$('go').onclick=()=>running()?pause():start();
-$('reset').onclick=reset;
-$('big').onclick=()=>setBig(!S.big);
-$('full').onclick=full;
-$('mm').value=Math.floor(S.dur/60);$('ss').value=String(S.dur%60).padStart(2,'0');
-$('custom').onsubmit=e=>{e.preventDefault();const n=id=>parseInt($(id).value.replace(/\D/g,''),10)||0,sec=n('mm')*60+Math.min(59,n('ss'));
-  if(sec>0){setDur(sec);$('mm').value=Math.floor(S.dur/60);$('ss').value=String(S.dur%60).padStart(2,'0');document.activeElement.blur()}};
-addEventListener('keydown',e=>{
-  if(e.target.tagName==='INPUT'||e.ctrlKey||e.metaKey||e.altKey)return;
-  const k=e.key.toLowerCase();
-  if(k===' '){e.preventDefault();running()?pause():start()}
-  else if(k==='r')reset();else if(k==='b')setBig(!S.big);else if(k==='f')full();
-});
-if(running())awake(true);
-document.addEventListener('visibilitychange',()=>{if(!document.hidden&&running()){lock=null;awake(true)}});
+function fill(){$('hh').value=Math.floor(S.dur/3600);$('mm').value=String(Math.floor(S.dur/60)%60).padStart(2,'0');$('ss').value=String(S.dur%60).padStart(2,'0')}
+let lastDur=S.dur;
+function sync(){load();if(!SCREEN&&S.dur!==lastDur)fill();awake();paint()}
+addEventListener('storage',e=>{if(e.key===KEY||e.key===null)sync()});
+addEventListener('focus',sync);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden){lock=null;sync()}});
+addEventListener('hashchange',()=>location.reload());
+const full=()=>document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen().catch(()=>{});
 
-// the controls leave the picture after three still seconds, unless someone is typing a time
-let still;
-const wake=()=>{document.body.classList.remove('quiet');clearTimeout(still);
-  still=setTimeout(()=>{if(document.activeElement?.tagName!=='INPUT')document.body.classList.add('quiet');else wake()},3000)};
-['mousemove','mousedown','keydown','touchstart'].forEach(t=>addEventListener(t,wake,{passive:true}));wake();
+if(SCREEN){
+  document.querySelector('.app').remove();
+  const hint=$('hint');let hide;
+  const showHint=()=>{if(document.fullscreenElement)return;hint.classList.add('on');clearTimeout(hide);hide=setTimeout(()=>hint.classList.remove('on'),4000)};
+  document.addEventListener('fullscreenchange',()=>document.fullscreenElement?hint.classList.remove('on'):showHint());
+  addEventListener('dblclick',full);
+  addEventListener('keydown',e=>{if(e.code==='KeyF'&&!e.ctrlKey&&!e.metaKey&&!e.altKey)full()});
+  // browsers keep audio locked until someone clicks or presses a key in this window
+  ['pointerdown','keydown'].forEach(t=>addEventListener(t,unlock));
+  unlock();
+  showHint();
+}else{
+  document.querySelector('.fill').remove();$('hint').remove();$('soundHint').remove();
+  $('slot').replaceWith(stage);
+  const commit=()=>{lastDur=S.dur;save();awake();paint()};
+  const start=()=>{if(running())return;if(S.left<=0)S.left=S.dur*1000;S.endAt=Date.now()+S.left;S.view='clock';commit()};
+  const pause=()=>{if(!running())return;S.left=left();S.endAt=0;commit()};
+  const reset=()=>{S.endAt=0;S.left=S.dur*1000;commit()};
+  const setDur=sec=>{S.dur=Math.min(MAX,Math.max(1,Math.round(sec)));reset();fill()};
+  const setView=v=>{S.view=v;commit()};
+  PRESETS.forEach(([s,name])=>{const x=document.createElement('button');x.textContent=name;x.dataset.s=s;
+    x.onclick=()=>setDur(s);$('presets').append(x)});
+  $('go').onclick=()=>running()?pause():start();
+  $('reset').onclick=reset;
+  $('vPoster').onclick=()=>setView('poster');
+  $('vClock').onclick=()=>setView('clock');
+  $('lookSel').onchange=e=>{S.look=e.target.value;commit()};
+  $('mute').onclick=()=>{S.mute=!S.mute;commit()};
+  $('test').onclick=()=>{S.ping=Date.now();commit()};
+  $('open').onclick=()=>window.open(location.href.split('#')[0]+'#screen','pt-timer-screen','popup,width=1280,height=720');
+  $('custom').onsubmit=e=>{e.preventDefault();const n=id=>parseInt($(id).value.replace(/\D/g,''),10)||0;
+    const sec=n('hh')*3600+Math.min(59,n('mm'))*60+Math.min(59,n('ss'));if(sec>0)setDur(sec)};
+  // a mouse click leaves no focus behind, so Space right after still means start/stop, not "press that button again"
+  document.addEventListener('click',e=>{const b=e.target.closest('button');if(b&&e.detail>0)b.blur()});
+  addEventListener('keydown',e=>{
+    if(e.target.tagName==='INPUT'||e.ctrlKey||e.metaKey||e.altKey)return;
+    const k=e.code; // the key's place on the keyboard, so the shortcuts also work while the keyboard is set to Thai
+    if(k==='Space'){if(e.target.tagName==='BUTTON')return;e.preventDefault();running()?pause():start()}
+    else if(k==='KeyR')reset();
+  });
+  fill();paint();
+}
+awake();
 </script>
 </body>
 </html>
