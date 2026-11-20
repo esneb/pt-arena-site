@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>จับเวลา · PT Robotics</title>
+<style>
+/* Countdown for the hall projector. The event poster (timer-bg.webp, 16:9) is the page; the clock sits on the
+   open water between the two robots so the poster's own title stays readable. "ขยาย" trades the poster for size. */
+@font-face{font-family:Prompt;src:url(font/Prompt-Medium.ttf);font-weight:500}
+@font-face{font-family:Prompt;src:url(font/Prompt-SemiBold.ttf);font-weight:600}
+@font-face{font-family:Oxanium;src:url(font/Oxanium.ttf);font-weight:200 800}
+:root{
+  --navy:#04143a; --navy-deep:#020a22; --ice:#f1f7ff; --ice-dim:#b9cdf0; --cyan:#3fd0ff; --gold:#ffc62e; --red:#ff5b4a;
+  --panel:rgba(4,20,58,.82); --line:rgba(63,208,255,.34); --focus:#ffe08a;
+  --num:Oxanium,Bahnschrift,sans-serif; --th:Prompt,"Leelawadee UI",sans-serif;
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;overflow:clip;background:var(--navy-deep);color:var(--ice);font-family:var(--th)}
+body.quiet{cursor:none}
+/* the poster again, blurred, fills a screen that is not 16:9 */
+.fill{position:fixed;inset:-4%;background:url(timer-bg.webp) center/cover;filter:blur(28px) brightness(.5)}
+.stage{position:fixed;inset:0;margin:auto;width:min(100vw,177.78vh);aspect-ratio:16/9;container-type:size;
+  background:url(timer-bg.webp) center/cover;overflow:hidden}
+.scrim{position:absolute;inset:0;background:rgba(2,10,34,.8);opacity:0;transition:opacity .3s;pointer-events:none}
+.clock{position:absolute;left:50%;top:78%;translate:-50% -50%;display:flex;flex-direction:column;align-items:center;
+  transition:top .3s}
+.digits{display:flex;align-items:center;font-family:var(--num);font-weight:700;line-height:1;white-space:nowrap;
+  font-size:calc(42cqw / var(--ems,2.82));color:var(--ice);
+  text-shadow:0 .03em 0 var(--navy),0 0 .05em var(--navy),0 .05em .22em var(--navy-deep);transition:color .3s}
+.digits b{display:inline-block;width:.62em;text-align:center;font-weight:inherit}
+.digits i{display:inline-block;width:.34em;text-align:center;font-style:normal;translate:0 -.06em}
+.note{font-weight:600;font-size:3.1cqw;line-height:1;letter-spacing:.06em;color:var(--red);height:3.1cqw;margin-bottom:1cqw;
+  padding:1cqw 2.4cqw;border-radius:99cqw;background:var(--navy-deep);box-sizing:content-box;visibility:hidden}
+body.warn .digits{color:var(--gold)}
+body.last .digits,body.over .digits{color:var(--red)}
+body.over .note{visibility:visible}
+body.over .digits{animation:blink 1s steps(2,jump-none) 6}
+@keyframes blink{50%{opacity:.25}}
+body.big .scrim{opacity:1}
+body.big .clock{top:50%}
+body.big .digits{font-size:calc(86cqw / var(--ems,2.82))}
+body.big .note{font-size:5cqw;height:5cqw;margin-bottom:2cqw}
+
+/* controls: for the person at the notebook; they fade while nobody moves the mouse */
+.bar{position:fixed;left:0;right:0;bottom:0;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:var(--s3) var(--s5);
+  padding:var(--s3) var(--s4);background:var(--panel);border-top:1px solid var(--line);font-size:15px;line-height:1;
+  transition:opacity .25s,translate .25s}
+body.quiet .bar{opacity:0;translate:0 100%;pointer-events:none}
+.grp{display:flex;align-items:center;gap:var(--s2)}
+.grp>span{color:var(--ice-dim);font-size:13px}
+button,input{font:inherit;color:var(--ice);height:44px;border:1px solid var(--line);border-radius:8px;background:rgba(241,247,255,.07);
+  outline:2px solid transparent;outline-offset:2px}
+button{padding:0 var(--s4);cursor:pointer;font-weight:500;transition:background-color .15s,border-color .15s}
+button:hover{background:rgba(241,247,255,.16)}
+button:active{background:rgba(241,247,255,.26)}
+button:focus-visible,input:focus-visible{outline-color:var(--focus)}
+button:disabled{opacity:.55;cursor:not-allowed}
+button[aria-pressed=true]{border-color:var(--cyan);background:rgba(63,208,255,.2)}
+button.go{min-width:104px;font-weight:600;color:var(--navy-deep);background:var(--gold);border-color:var(--gold)}
+button.go:hover{background:#ffd45c}
+button.go:active{background:#e9b21f}
+input{width:64px;text-align:center;font-family:var(--num);font-size:18px;padding:0 var(--s1)}
+.keys{color:var(--ice-dim);font-size:12px}
+.keys kbd{font-family:var(--num);color:var(--ice);border:1px solid var(--line);border-radius:4px;padding:2px 6px;margin:0 2px}
+.by{color:var(--ice-dim);font-size:12px}
+@media (prefers-reduced-motion:reduce){
+  .scrim,.clock,.digits,.bar,button{transition:none}
+  body.over .digits{animation:none}
+}
+</style>
+</head>
+<body>
+<div class="fill" aria-hidden="true"></div>
+<main class="stage">
+  <div class="scrim" aria-hidden="true"></div>
+  <div class="clock">
+    <div class="note" id="note">หมดเวลา</div>
+    <div class="digits" id="digits" role="timer" aria-label="เวลาที่เหลือ"></div>
+  </div>
+</main>
+<div class="bar" id="bar">
+  <div class="grp">
+    <button class="go" id="go">เริ่ม</button>
+    <button id="reset">เริ่มใหม่</button>
+  </div>
+  <div class="grp" id="presets"><span>นาที</span></div>
+  <form class="grp" id="custom">
+    <span>ตั้งเอง</span>
+    <input id="mm" inputmode="numeric" maxlength="3" aria-label="นาที" placeholder="นาที">
+    <span>:</span>
+    <input id="ss" inputmode="numeric" maxlength="2" aria-label="วินาที" placeholder="วิ">
+    <button>ตั้งเวลา</button>
+  </form>
+  <div class="grp">
+    <button id="big" aria-pressed="false">ขยาย</button>
+    <button id="full">เต็มจอ</button>
+  </div>
+  <div class="keys"><kbd>Space</kbd>เริ่ม/หยุด <kbd>R</kbd>เริ่มใหม่ <kbd>B</kbd>ขยาย <kbd>F</kbd>เต็มจอ</div>
+  <div class="by">Developed by 5AM ROOM</div>
+</div>
+<script>
+// One countdown. Time left is always worked out from the clock on the wall (endAt), never by counting ticks,
+// so a reload or a sleeping tab cannot make it drift; the state is kept on this machine.
+const KEY='pt-timer',PRESETS=[1,2,3,5,10],MAX=999*60+59;
+const $=id=>document.getElementById(id);
+let S={dur:120,left:120000,endAt:0,big:false};
+try{S={...S,...JSON.parse(localStorage.getItem(KEY)||'{}')}}catch(e){}
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}};
+const running=()=>S.endAt>0;
+const left=()=>running()?Math.max(0,S.endAt-Date.now()):S.left;
+
+let lock=null;
+const awake=async on=>{try{if(on&&!lock&&navigator.wakeLock)lock=await navigator.wakeLock.request('screen');if(!on&&lock){await lock.release();lock=null}}catch(e){lock=null}};
+
+function start(){if(running())return;if(S.left<=0)S.left=S.dur*1000;S.endAt=Date.now()+S.left;save();awake(true);paint()}
+function pause(){if(!running())return;S.left=left();S.endAt=0;save();awake(false);paint()}
+function reset(){S.endAt=0;S.left=S.dur*1000;save();awake(false);paint()}
+function setDur(sec){S.dur=Math.min(MAX,Math.max(1,Math.round(sec)));reset()}
+function setBig(on){S.big=on;save();paint()}
+const full=()=>document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen().catch(()=>{});
+
+let shown='';
+function paint(){
+  const ms=left(),sec=Math.ceil(ms/1000),over=ms<=0;
+  if(over&&running()){S.endAt=0;S.left=0;save();awake(false)}
+  const m=Math.floor(sec/60),text=String(m).padStart(2,'0')+':'+String(sec%60).padStart(2,'0');
+  if(text!==shown){
+    shown=text;
+    $('digits').innerHTML=[...text].map(c=>c===':'?'<i>:</i>':'<b>'+c+'</b>').join('');
+    $('digits').style.setProperty('--ems',((text.length-1)*.62+.34).toFixed(2));
+  }
+  const b=document.body.classList,warnAt=Math.min(10,S.dur/2);
+  b.toggle('over',over);b.toggle('last',!over&&sec<=Math.min(5,warnAt));b.toggle('warn',!over&&sec<=warnAt&&sec>Math.min(5,warnAt));
+  b.toggle('big',S.big);
+  $('go').textContent=running()?'หยุด':over?'เริ่มอีกรอบ':ms<S.dur*1000?'ต่อ':'เริ่ม';
+  $('big').setAttribute('aria-pressed',S.big);
+  document.querySelectorAll('#presets button').forEach(x=>x.setAttribute('aria-pressed',+x.dataset.m*60===S.dur));
+}
+(function loop(){paint();requestAnimationFrame(loop)})();
+setInterval(paint,250); // a hidden tab gets no animation frames; this keeps the end from being missed
+
+PRESETS.forEach(m=>{const x=document.createElement('button');x.textContent=m;x.dataset.m=m;x.setAttribute('aria-label',m+' นาที');x.onclick=()=>setDur(m*60);$('presets').append(x)});
+$('go').onclick=()=>running()?pause():start();
+$('reset').onclick=reset;
+$('big').onclick=()=>setBig(!S.big);
+$('full').onclick=full;
+$('mm').value=Math.floor(S.dur/60);$('ss').value=String(S.dur%60).padStart(2,'0');
+$('custom').onsubmit=e=>{e.preventDefault();const n=id=>parseInt($(id).value.replace(/\D/g,''),10)||0,sec=n('mm')*60+Math.min(59,n('ss'));
+  if(sec>0){setDur(sec);$('mm').value=Math.floor(S.dur/60);$('ss').value=String(S.dur%60).padStart(2,'0');document.activeElement.blur()}};
+addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'||e.ctrlKey||e.metaKey||e.altKey)return;
+  const k=e.key.toLowerCase();
+  if(k===' '){e.preventDefault();running()?pause():start()}
+  else if(k==='r')reset();else if(k==='b')setBig(!S.big);else if(k==='f')full();
+});
+if(running())awake(true);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&running()){lock=null;awake(true)}});
+
+// the controls leave the picture after three still seconds, unless someone is typing a time
+let still;
+const wake=()=>{document.body.classList.remove('quiet');clearTimeout(still);
+  still=setTimeout(()=>{if(document.activeElement?.tagName!=='INPUT')document.body.classList.add('quiet');else wake()},3000)};
+['mousemove','mousedown','keydown','touchstart'].forEach(t=>addEventListener(t,wake,{passive:true}));wake();
+</script>
+</body>
+</html>
