@@ -73,14 +73,14 @@ html,body{margin:0;overflow-x:clip;background:var(--navy-deep);color:var(--ice);
    poster's own title (white, thick navy edge, solid navy drop). Their bottom stays put, so in the last minute they
    grow up into the skyline and stop below the venue line (44.6% of the height) */
 .look-poster .band{top:0}
-.look-poster .row{top:auto;bottom:8.7cqh;flex-direction:column;gap:.5cqh;opacity:0;translate:0 5cqh}
+.look-poster .row{top:auto;bottom:7.6cqh;flex-direction:column;gap:.5cqh;opacity:0;translate:0 5cqh}
 .look-poster .line{height:1.3cqh;opacity:0}
 .look-poster.clock .row,.look-poster.clock .line{opacity:1;translate:none}
 .look-poster .tag{order:-1;font-size:2.1cqw;line-height:1.5;padding:.15cqw 1.8cqw;border-radius:99px;
   color:var(--navy-deep);background:var(--gold)}
 .look-poster .tag small{display:none}
 .look-poster .digits{font-size:min(17.2cqw,calc(54cqw / var(--ems,2.82)));color:var(--ice);
-  -webkit-text-stroke:.045em var(--navy-deep);paint-order:stroke fill;filter:drop-shadow(0 .03em 0 var(--navy-deep))}
+  -webkit-text-stroke:.045em var(--navy-deep);paint-order:stroke fill;filter:drop-shadow(0 .03em 0 var(--navy-deep));margin-bottom:-.12em}
 .look-poster.big .digits{font-size:min(calc(60cqw / var(--ems,2.82)),39cqh)}
 .stage.look-poster.over .digits{display:flex;color:var(--red)}
 .look-poster .over-msg{order:-1;gap:1cqw;padding:.15cqw 1.8cqw;border-radius:99px;color:var(--ice);background:var(--red-band)}
@@ -114,7 +114,10 @@ body.screen{height:100vh;overflow:hidden;cursor:none}
 .screen .app{display:none}
 /* the poster again, blurred, fills a window that is not 16:9 */
 .fill{position:fixed;inset:-4%;background:url(timer-bg.webp) center/cover;filter:blur(28px)}
-.screen .stage{position:fixed;inset:0;margin:auto;width:min(100vw,177.78vh);height:min(56.25vw,100vh)}
+/* the stage fills the whole window, so a 16:10 or 4:3 projector gets no bars: the poster is cut a little at the
+   sides and every height stays where it was. Only a window wider than 16:9 keeps side bars (cutting top and bottom
+   would move the poster's lines away from the heights the looks rely on) */
+.screen .stage{position:fixed;inset:0;margin:auto;aspect-ratio:auto;width:min(100vw,177.78vh);height:100vh}
 .hint{position:fixed;top:24px;right:24px;margin:0;padding:10px 18px;font-weight:500;font-size:18px;line-height:1.5;
   color:var(--ice);background:var(--navy-deep);border:1px solid var(--ui-line-strong);border-radius:8px;
   opacity:0;transition:opacity .6s;pointer-events:none}
