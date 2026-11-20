@@ -283,15 +283,25 @@ function tone(f,type,at,len,vol,hold){
   g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(vol,t+.012);
   if(hold)g.gain.setValueAtTime(vol,t+hold);
   g.gain.exponentialRampToValueAtTime(.0001,t+len);
-  o.connect(g).connect(ac.destination);o.start(t);o.stop(t+len+.05);
+  o.connect(g).connect(out());o.start(t);o.stop(t+len+.05);
 }
+// everything goes through one limiter, so the beeps can be loud without crackling
+let bus=null;
+function out(){
+  if(!bus){bus=ac.createDynamicsCompressor();bus.threshold.value=-6;bus.knee.value=0;bus.ratio.value=20;
+    bus.attack.value=.002;bus.release.value=.1;bus.connect(ac.destination)}
+  return bus;
+}
+// Stopwatch beeps, the kind every sports clock uses: one pitch for the count, a higher long one for the finish.
+const BEEP=880,LONG=1320;
 const SFX={
-  chime:()=>{tone(880,'sine',0,.5,.5);tone(1318.5,'sine',.24,.8,.5)},
-  // 10 minutes left: the same two notes an octave lower, slower and softer, so it never sounds like the 1-minute chime
-  remind:()=>{tone(440,'sine',0,.9,.4);tone(659.25,'sine',.4,1.2,.4)},
-  tick:()=>tone(1000,'square',0,.09,.18),
-  tickHi:()=>tone(1568,'square',0,.12,.22),
-  end:()=>[233,277,349].forEach(f=>tone(f,'sawtooth',0,1.2,.22,1.05))
+  // 1 minute left: two beeps
+  chime:()=>{tone(BEEP,'square',0,.18,.7,.15);tone(BEEP,'square',.3,.18,.7,.15)},
+  // 10 minutes left: one longer beep
+  remind:()=>tone(BEEP,'square',0,.6,.7,.55),
+  tick:()=>tone(BEEP,'square',0,.15,.6,.12),
+  tickHi:()=>tone(BEEP,'square',0,.2,.9,.17),
+  end:()=>tone(LONG,'square',0,1.5,.9,1.4)
 };
 function sound(kind){if(ac&&ac.state==='running')try{SFX[kind]()}catch(e){}}
 
